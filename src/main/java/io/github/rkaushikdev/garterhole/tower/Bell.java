@@ -28,6 +28,9 @@ public final class Bell {
     /** Pounds in a quarter. */
     public static final int POUNDS_PER_QUARTER = 28;
 
+    /** Kilograms in a pound, exactly, as the weights and measures act has it. */
+    public static final double KILOGRAMS_PER_POUND = 0.45359237;
+
     private static final int EARLIEST_CASTING = 1200;
     private static final int LATEST_CASTING = 2200;
     private static final int MOST_QUARTERS = 3;
@@ -171,6 +174,23 @@ public final class Bell {
     }
 
     /**
+     * Build a bell from a weight in kilograms, which is how a founder casting
+     * today certifies it and how a directory lists it beside the old weight.
+     *
+     * @param number its number, counting from the treble
+     * @param kilograms what it weighs
+     * @param details its note, founder and casting year
+     * @return the bell
+     * @throws ValidationException when the weight is not a weight
+     */
+    public static Bell weighingKilograms(int number, double kilograms, Details details) {
+        if (!(kilograms > 0)) {
+            throw new ValidationException("a bell cannot weigh " + Json.number(kilograms) + " kilograms");
+        }
+        return new Bell(number, kilograms / KILOGRAMS_PER_POUND, details);
+    }
+
+    /**
      * @return every note a bell may be tuned to, in their sharp spellings, as a
      *     list the caller may change; the flat spellings are read as well
      */
@@ -223,6 +243,13 @@ public final class Bell {
      */
     public OptionalInt cast() {
         return cast == null ? OptionalInt.empty() : OptionalInt.of(cast);
+    }
+
+    /**
+     * @return what the bell weighs to the nearest kilogram
+     */
+    public long weightKilograms() {
+        return Math.round(weightPounds * KILOGRAMS_PER_POUND);
     }
 
     /**

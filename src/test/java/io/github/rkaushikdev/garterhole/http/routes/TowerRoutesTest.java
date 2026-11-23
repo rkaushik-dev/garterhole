@@ -141,6 +141,8 @@ class TowerRoutesTest {
             Response response = ask("GET", "/towers/bridgend-st-mary-the-virgin/bells");
             assertThat(response.body().path("bells")).hasSize(6);
             assertThat(response.body().path("tenor").asText()).isEqualTo("12-1-4");
+            assertThat(response.body().path("bells").path(5).path("weightKg").asLong())
+                    .isEqualTo(624);
             assertThat(response.body().path("bells").path(0).path("weight").asText())
                     .isEqualTo("4-0-0");
         }

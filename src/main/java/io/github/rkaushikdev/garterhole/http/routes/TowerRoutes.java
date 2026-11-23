@@ -11,13 +11,12 @@ import io.github.rkaushikdev.garterhole.http.Router;
 import io.github.rkaushikdev.garterhole.tower.Bell;
 import io.github.rkaushikdev.garterhole.tower.Note;
 import io.github.rkaushikdev.garterhole.tower.Tower;
+import io.github.rkaushikdev.garterhole.tower.TowerSerialiser;
 import io.github.rkaushikdev.garterhole.tower.Tuning;
 import io.github.rkaushikdev.garterhole.util.Json;
 import io.github.rkaushikdev.garterhole.util.Text;
 import io.github.rkaushikdev.garterhole.validation.Schema;
 import io.github.rkaushikdev.garterhole.validation.Schemas;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -48,6 +47,9 @@ public final class TowerRoutes {
                                             Schemas.optional(Schemas.string().pattern(BOARD_WEIGHT))),
                                     Map.entry(
                                             "weightPounds",
+                                            Schemas.optional(Schemas.number().min(1))),
+                                    Map.entry(
+                                            "weightKg",
                                             Schemas.optional(Schemas.number().min(1))),
                                     Map.entry(
                                             "note",
@@ -100,6 +102,7 @@ public final class TowerRoutes {
                 entry.put("number", bell.number());
                 entry.put("weight", bell.weightText());
                 Json.putNumber(entry, "weightPounds", bell.weightPounds());
+                entry.put("weightKg", bell.weightKilograms());
                 entry.put("note", bell.note().orElse(null));
             }
             ObjectNode answer = Json.object();
@@ -135,13 +138,7 @@ public final class TowerRoutes {
      *     its identifier disagrees with its name
      */
     public static Tower towerFrom(JsonNode document) {
-        List<Bell> bells = new ArrayList<>();
-        for (JsonNode entry : document.path("bells")) {
-            bells.add(bellFrom(entry));
-        }
-        JsonNode place = document.path("place");
-        Tower tower =
-                new Tower(document.path("name").textValue(), Json.isUndefined(place) ? null : place.textValue(), bells);
+        Tower tower = TowerSerialiser.towerFromFields(document);
         JsonNode id = document.path("id");
         if (!Json.isUndefined(id) && !id.equals(Json.toNode(tower.id()))) {
             throw new ValidationException(
@@ -180,29 +177,5 @@ public final class TowerRoutes {
         JsonNode place = document.path("place");
         String name = Json.templateText(document.path("name"));
         return Text.slugify(Json.isUndefined(place) ? name : Json.templateText(place) + " " + name);
-    }
-
-    private static Bell bellFrom(JsonNode entry) {
-        int number = entry.path("number").intValue();
-        Bell.Details details = new Bell.Details(
-                textOrNull(entry.path("note")),
-                textOrNull(entry.path("founder")),
-                entry.path("cast").isNumber()
-                        ? Integer.valueOf(entry.path("cast").intValue())
-                        : null);
-        JsonNode weight = entry.path("weight");
-        if (!Json.isUndefined(weight)) {
-            return Bell.weighing(number, weight.textValue(), details);
-        }
-        JsonNode weightPounds = entry.path("weightPounds");
-        if (Json.isUndefined(weightPounds)) {
-            throw new ValidationException(
-                    "bell " + Json.templateText(entry.path("number")) + " does not say what it weighs");
-        }
-        return new Bell(number, weightPounds.doubleValue(), details);
-    }
-
-    private static String textOrNull(JsonNode value) {
-        return value.isTextual() ? value.textValue() : null;
     }
 }

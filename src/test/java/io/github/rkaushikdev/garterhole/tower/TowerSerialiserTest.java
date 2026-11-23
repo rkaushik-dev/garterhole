@@ -126,7 +126,7 @@ class TowerSerialiserTest {
         void refusesABellThatDoesNotSayWhatItWeighs() {
             assertThatThrownBy(() -> towerFromJson(
                             doc("{'format':'garterhole.tower','version':1,'name':'Test','bells':[{'number':1}]}")))
-                    .hasMessageContaining("bell 0 does not say what it weighs");
+                    .hasMessageContaining("bell 1 does not say what it weighs");
         }
 
         @Test

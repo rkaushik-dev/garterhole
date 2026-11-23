@@ -149,6 +149,30 @@ class BellTest {
     }
 
     @Nested
+    class Kilograms {
+
+        @Test
+        void readsAWeightInKilogramsAndGivesItBackInBoth() {
+            Bell tenor = Bell.weighingKilograms(8, 1199, Details.NONE);
+            assertThat(tenor.weightKilograms()).isEqualTo(1199);
+            assertThat(tenor.weightText()).isEqualTo("23-2-11");
+        }
+
+        @Test
+        void convertsABoardWeightToTheNearestKilogram() {
+            assertThat(Bell.weighing(1, "4-0-0").weightKilograms()).isEqualTo(203);
+        }
+
+        @Test
+        void refusesAWeightThatIsNotOne() {
+            assertThatThrownBy(() -> Bell.weighingKilograms(1, 0, Details.NONE))
+                    .hasMessageContaining("cannot weigh 0 kilograms");
+            assertThatThrownBy(() -> Bell.weighingKilograms(1, Double.NaN, Details.NONE))
+                    .isInstanceOf(ValidationException.class);
+        }
+    }
+
+    @Nested
     class Notes {
 
         @Test

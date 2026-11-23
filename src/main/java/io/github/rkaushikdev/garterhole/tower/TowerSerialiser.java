@@ -84,16 +84,32 @@ public final class TowerSerialiser {
      */
     public static Tower towerFromJson(JsonNode document) {
         requireDocument(document, TOWER_FORMAT);
-        JsonNode bells = document.path("bells");
-        if (!bells.isArray()) {
+        if (!document.path("bells").isArray()) {
             throw new ValidationException("a tower document needs its bells");
         }
+        return towerFromFields(document);
+    }
+
+    /**
+     * Read a tower from its fields alone, the way a request body or a stored
+     * tower carries them, with no format or version in front. The bells may
+     * give their weight as a board writes it, in pounds, or in kilograms as a
+     * founder's certificate does. This is the one reader of a tower's bells,
+     * which the HTTP surface and the command line both go through.
+     *
+     * @param fields the name, place and bells
+     * @return the tower
+     * @throws ValidationException when a bell cannot be read or the ring has a gap
+     * @throws IllegalArgumentException when the name is missing or empty
+     */
+    public static Tower towerFromFields(JsonNode fields) {
+        JsonNode bells = fields.path("bells");
         List<Bell> ring = new ArrayList<>();
         for (int index = 0; index < bells.size(); index += 1) {
             ring.add(bellFromJson(bells.get(index), index));
         }
-        JsonNode name = document.path("name");
-        String place = DocumentFields.text(document.path("place"));
+        JsonNode name = fields.path("name");
+        String place = DocumentFields.text(fields.path("place"));
         return new Tower(DocumentFields.isAbsent(name) ? "" : Json.templateText(name), place, ring);
     }
 
@@ -192,7 +208,13 @@ public final class TowerSerialiser {
         if (weightPounds.isNumber()) {
             return new Bell(numberOf(entry.path("number")), weightPounds.doubleValue(), details);
         }
-        throw new ValidationException("bell " + index + " does not say what it weighs");
+        JsonNode weightKg = entry.path("weightKg");
+        if (weightKg.isNumber()) {
+            return Bell.weighingKilograms(numberOf(entry.path("number")), weightKg.doubleValue(), details);
+        }
+        String named =
+                entry.path("number").isNumber() ? Json.templateText(entry.path("number")) : String.valueOf(index);
+        throw new ValidationException("bell " + named + " does not say what it weighs");
     }
 
     private static int numberOf(JsonNode number) {
