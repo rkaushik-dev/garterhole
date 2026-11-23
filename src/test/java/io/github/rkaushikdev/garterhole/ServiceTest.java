@@ -105,6 +105,7 @@ class ServiceTest {
             ObjectNode described = service.describeMethod("Plain Bob Major");
             assertThat(described.get("className").asText()).isEqualTo("Bob");
             assertThat(described.get("huntBells")).isEqualTo(Json.parse("[1]"));
+            assertThat(described.get("leadHeadCode").asText()).isEqualTo("a");
         }
     }
 

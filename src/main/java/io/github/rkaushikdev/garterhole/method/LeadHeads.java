@@ -3,8 +3,10 @@ package io.github.rkaushikdev.garterhole.method;
 import io.github.rkaushikdev.garterhole.core.Cycles;
 import io.github.rkaushikdev.garterhole.util.CollectionHelpers;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Lead heads and splicing.
@@ -14,22 +16,24 @@ import java.util.Map;
  * on the same stage and have the same lead head, and it is the first thing a
  * band ringing a spliced quarter needs to know.
  *
- * <p>Nothing here reads a recorded lead head code. The lead head is rung out of
- * the notation, which is the only version that cannot be wrong.
+ * <p>Nothing here reads a lead head code somebody recorded. The lead head is
+ * rung out of the notation, and so is its code, by {@link LeadHeadCode}, since
+ * the notation is the only version that cannot be wrong.
  */
 public final class LeadHeads {
 
     private LeadHeads() {}
 
     /**
-     * A short description of a lead head, for a report.
+     * A short description of a lead head, for a report or a splicing table.
      *
      * @param leadHead the lead head row
      * @param leads how many leads a plain course runs to
      * @param leadEnd the change at the lead end, as notation
      * @param leadLength the number of changes in a lead
+     * @param code the Central Council lead head code, when the lead head has one
      */
-    public record Description(String leadHead, int leads, String leadEnd, int leadLength) {}
+    public record Description(String leadHead, int leads, String leadEnd, int leadLength, Optional<String> code) {}
 
     /**
      * @param method a method
@@ -110,7 +114,8 @@ public final class LeadHeads {
 
     /**
      * @param method a method
-     * @return the lead head, the leads in a course, the lead end change and the lead length
+     * @return the lead head, the leads in a course, the lead end change, the
+     *     lead length and the lead head code
      */
     public static Description describeLeadHead(Method method) {
         HuntBells.requireMethod(method);
@@ -118,6 +123,24 @@ public final class LeadHeads {
                 method.leadHead().toString(),
                 leadHeadOrder(method),
                 method.leadEndChange().toString(),
-                method.leadLength());
+                method.leadLength(),
+                LeadHeadCode.codeOf(method));
+    }
+
+    /**
+     * Methods that share a lead head code splice at a lead end without a
+     * second thought, so a splicing table is grouped by code. Methods with no
+     * code are left out rather than lumped together.
+     *
+     * @param methods some methods
+     * @return the methods with a code, grouped by stage and code, for example {@code 8:b}
+     */
+    public static Map<String, List<Method>> groupByCode(List<Method> methods) {
+        List<Method> coded = methods.stream()
+                .filter(method -> LeadHeadCode.codeOf(method).isPresent())
+                .toList();
+        return Collections.unmodifiableMap(CollectionHelpers.groupBy(
+                coded,
+                method -> method.stage() + ":" + LeadHeadCode.codeOf(method).orElseThrow()));
     }
 }

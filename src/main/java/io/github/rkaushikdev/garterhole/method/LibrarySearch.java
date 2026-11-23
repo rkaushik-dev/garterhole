@@ -3,7 +3,6 @@ package io.github.rkaushikdev.garterhole.method;
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.util.LocaleOrder;
 import io.github.rkaushikdev.garterhole.util.Text;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -201,11 +200,7 @@ public final class LibrarySearch {
      * @return the groups, keyed by lead head signature
      */
     public static Map<String, List<Method>> spliceGroups(MethodLibrary library) {
-        Map<String, List<Method>> groups = new LinkedHashMap<>();
-        for (Method method : library) {
-            groups.computeIfAbsent(LeadHeads.leadHeadSignature(method), key -> new ArrayList<>())
-                    .add(method);
-        }
+        Map<String, List<Method>> groups = new LinkedHashMap<>(LeadHeads.groupByLeadHead(library.methods()));
         groups.values().removeIf(bucket -> bucket.size() < 2);
         return groups;
     }

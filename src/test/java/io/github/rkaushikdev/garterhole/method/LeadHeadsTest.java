@@ -1,6 +1,7 @@
 package io.github.rkaushikdev.garterhole.method;
 
 import static io.github.rkaushikdev.garterhole.method.LeadHeads.describeLeadHead;
+import static io.github.rkaushikdev.garterhole.method.LeadHeads.groupByCode;
 import static io.github.rkaushikdev.garterhole.method.LeadHeads.groupByLeadHead;
 import static io.github.rkaushikdev.garterhole.method.LeadHeads.leadEndPlaces;
 import static io.github.rkaushikdev.garterhole.method.LeadHeads.leadHeadOrder;
@@ -13,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -150,12 +152,32 @@ class LeadHeadsTest {
 
         @Test
         void reportsEverythingASplicingTableNeeds() {
-            assertThat(describeLeadHead(CAMBRIDGE)).isEqualTo(new LeadHeads.Description("15738264", 7, "12", 32));
+            assertThat(describeLeadHead(CAMBRIDGE))
+                    .isEqualTo(new LeadHeads.Description("15738264", 7, "12", 32, Optional.of("b")));
         }
 
         @Test
         void reportsAnEighthsPlaceMethod() {
             assertThat(describeLeadHead(BRISTOL).leadEnd()).isEqualTo("18");
+            assertThat(describeLeadHead(BRISTOL).code()).contains("m");
+        }
+    }
+
+    @Nested
+    class GroupByCode {
+
+        @Test
+        void putsCambridgeAndYorkshireTogetherAndBristolApart() {
+            Map<String, List<Method>> groups =
+                    groupByCode(List.of(CAMBRIDGE, BRISTOL, YORKSHIRE, PLAIN_BOB_MAJOR, PLAIN_BOB_MINOR));
+            assertThat(groups.keySet()).containsExactly("8:b", "8:m", "8:a", "6:a");
+            assertThat(groups.get("8:b")).containsExactly(CAMBRIDGE, YORKSHIRE);
+        }
+
+        @Test
+        void leavesOutAMethodWithNoCode() {
+            Method stedman = Method.of("Stedman", 7, "3.1.7.3.1.3,1");
+            assertThat(groupByCode(List.of(stedman))).isEmpty();
         }
     }
 }

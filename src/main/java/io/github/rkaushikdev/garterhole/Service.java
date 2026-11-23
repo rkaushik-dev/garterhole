@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.rkaushikdev.garterhole.composition.Analysis;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis;
 import io.github.rkaushikdev.garterhole.method.Classifier;
+import io.github.rkaushikdev.garterhole.method.LeadHeadCode;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.method.MethodSerialiser;
 import io.github.rkaushikdev.garterhole.method.Title;
@@ -158,13 +159,15 @@ public final class Service {
 
     /**
      * @param title the method's title
-     * @return its document with the facts derived from its changes laid over it
+     * @return its document with the facts derived from its changes laid over
+     *     it, the lead head code among them ({@code null} when it has none)
      * @throws NotFoundException when the library does not hold the method
      */
     public ObjectNode describeMethod(String title) {
         Method method = MethodSerialiser.methodFromJson(getMethod(title));
         ObjectNode described = MethodSerialiser.methodToJson(method);
         described.setAll(Classifier.classify(method).toJson());
+        described.put("leadHeadCode", LeadHeadCode.codeOf(method).orElse(null));
         return described;
     }
 
