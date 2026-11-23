@@ -10,23 +10,84 @@ import io.github.rkaushikdev.garterhole.util.LocaleOrder;
 import io.github.rkaushikdev.garterhole.util.Text;
 import io.github.rkaushikdev.garterhole.util.Text.Align;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.function.ToLongFunction;
 
 /**
  * The table an association prints at the end of the year.
  *
  * <p>Counting performances is not the only way to order it, and which way is
  * chosen changes who is at the top. Somebody who rings fifty quarters is not
- * obviously ahead of somebody who rings four peals, so the ordering is a
- * parameter with three honest choices rather than a decision buried in a sort.
+ * obviously ahead of somebody who rings four peals, and neither is obviously
+ * ahead of somebody who rang twenty different methods, so the ordering is a
+ * parameter with honest choices rather than a decision buried in a sort.
  */
 public final class Leaderboard {
 
-    /** How a leaderboard may be ordered. */
-    public static final List<String> ORDERINGS = List.of("performances", "peals", "changes", "conducted");
+    /** The ways a leaderboard may be ordered, each with what it counts for a ringer. */
+    public enum Ordering {
+        /** Everything rung, whatever its length. */
+        PERFORMANCES(line -> line.totals().performances()),
+        /** Peals only. */
+        PEALS(line -> line.totals().peals()),
+        /** Quarter peals only. */
+        QUARTERS(line -> line.totals().quarters()),
+        /** Every change rung, which is the one a ringer of long touches likes. */
+        CHANGES(line -> line.totals().changes()),
+        /** Performances conducted. */
+        CONDUCTED(RingerLine::conducted),
+        /** Different methods rung, which rewards the band that learns rather than repeats. */
+        METHODS(RingerLine::methods);
 
-    private static final String DEFAULT_ORDERING = "performances";
+        private final ToLongFunction<RingerLine> score;
+
+        Ordering(ToLongFunction<RingerLine> score) {
+            this.score = score;
+        }
+
+        /**
+         * @return the ordering as it is written in a request, for example {@code peals}
+         */
+        public String label() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+
+        /**
+         * @param line what a ringer rang
+         * @return what the ringer scores under this ordering
+         */
+        public long score(RingerLine line) {
+            return score.applyAsLong(line);
+        }
+
+        /**
+         * @param label an ordering as it is written in a request
+         * @return the ordering
+         * @throws ValidationException naming the choices when nothing has that label
+         */
+        public static Ordering of(String label) {
+            for (Ordering ordering : values()) {
+                if (ordering.label().equals(label)) {
+                    return ordering;
+                }
+            }
+            throw new ValidationException(
+                    Json.quote(label) + " is not an ordering, so try one of " + String.join(", ", ORDERINGS));
+        }
+
+        @Override
+        public String toString() {
+            return label();
+        }
+    }
+
+    /** How a leaderboard may be ordered, as the labels a request uses. */
+    public static final List<String> ORDERINGS =
+            Arrays.stream(Ordering.values()).map(Ordering::label).toList();
+
     private static final int DEFAULT_TOP = 20;
 
     /** Highest score first, and by name on a tie. */
@@ -44,7 +105,7 @@ public final class Leaderboard {
     public record Options(String ordering, int top) {
 
         /** Ordered by performances, twenty places. */
-        public static final Options DEFAULT = new Options(DEFAULT_ORDERING, DEFAULT_TOP);
+        public static final Options DEFAULT = new Options(Ordering.PERFORMANCES.label(), DEFAULT_TOP);
 
         /**
          * @param how one of {@link #ORDERINGS}
@@ -52,6 +113,14 @@ public final class Leaderboard {
          */
         public Options withOrdering(String how) {
             return new Options(how, top);
+        }
+
+        /**
+         * @param how an ordering
+         * @return these options with that ordering
+         */
+        public Options withOrdering(Ordering how) {
+            return new Options(how.label(), top);
         }
 
         /**
@@ -83,16 +152,7 @@ public final class Leaderboard {
      * @throws ValidationException when the ordering is not one of them
      */
     public static long scoreOf(RingerLine line, String ordering) {
-        if (!ORDERINGS.contains(ordering)) {
-            throw new ValidationException(
-                    Json.quote(ordering) + " is not an ordering, so try one of " + String.join(", ", ORDERINGS));
-        }
-        return switch (ordering) {
-            case "conducted" -> line.conducted();
-            case "peals" -> line.totals().peals();
-            case "changes" -> line.totals().changes();
-            default -> line.totals().performances();
-        };
+        return Ordering.of(ordering).score(line);
     }
 
     /**
@@ -117,16 +177,15 @@ public final class Leaderboard {
         if (options.top() < 1) {
             throw new ValidationException("a leaderboard of " + options.top() + " places is not one");
         }
-        List<Place> lines = new ArrayList<>();
-        for (RingerLine line : Statistics.byRinger(records)) {
-            lines.add(new Place(0, line.name(), scoreOf(line, options.ordering()), line.totals(), line.conducted()));
-        }
-        lines.sort(BEST_FIRST);
-        List<Place> board = new ArrayList<>();
-        for (Place line : lines) {
-            if (line.score() <= 0 || board.size() == options.top()) {
-                continue;
-            }
+        Ordering ordering = Ordering.of(options.ordering());
+        List<Place> scored = Statistics.byRinger(records).stream()
+                .map(line -> new Place(0, line.name(), ordering.score(line), line.totals(), line.conducted()))
+                .filter(line -> line.score() > 0)
+                .sorted(BEST_FIRST)
+                .limit(options.top())
+                .toList();
+        List<Place> board = new ArrayList<>(scored.size());
+        for (Place line : scored) {
             board.add(new Place(board.size() + 1, line.name(), line.score(), line.totals(), line.conducted()));
         }
         return List.copyOf(board);

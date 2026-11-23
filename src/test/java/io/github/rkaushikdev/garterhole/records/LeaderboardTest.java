@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.records.Leaderboard.Options;
+import io.github.rkaushikdev.garterhole.records.Leaderboard.Ordering;
 import io.github.rkaushikdev.garterhole.records.Leaderboard.Place;
 import io.github.rkaushikdev.garterhole.records.Statistics.RingerLine;
 import io.github.rkaushikdev.garterhole.records.Statistics.Totals;
@@ -64,6 +65,23 @@ class LeaderboardTest {
         }
 
         @Test
+        void scoresQuartersAndMethodsToo() {
+            RingerLine counted = new RingerLine("Somebody", new Totals(9, 1, 6, 2, 12000), 2, 4);
+            assertThat(scoreOf(counted, "quarters")).isEqualTo(6);
+            assertThat(scoreOf(counted, "methods")).isEqualTo(4);
+            assertThat(Ordering.METHODS.score(line)).isZero();
+        }
+
+        @Test
+        void readsAnOrderingByItsLabel() {
+            assertThat(Ordering.of("conducted")).isEqualTo(Ordering.CONDUCTED);
+            assertThat(Ordering.QUARTERS).hasToString("quarters");
+            assertThatThrownBy(() -> Ordering.of("Peals"))
+                    .hasMessage("\"Peals\" is not an ordering, so try one of"
+                            + " performances, peals, quarters, changes, conducted, methods");
+        }
+
+        @Test
         void listsTheOrderingsItKnows() {
             assertThat(ORDERINGS).contains("peals");
             assertThatThrownBy(() -> ORDERINGS.add("height")).isInstanceOf(UnsupportedOperationException.class);
@@ -97,6 +115,33 @@ class LeaderboardTest {
             List<Place> board = leaderboard(records(), Options.DEFAULT.withOrdering("conducted"));
             assertThat(board.get(0).name()).isEqualTo("Alice");
             assertThat(board.get(0).score()).isEqualTo(2);
+        }
+
+        @Test
+        void ordersByDifferentMethodsRung() {
+            List<Performance> rung = new ArrayList<>(records());
+            rung.add(fields().date(LocalDate.of(2025, 8, 1))
+                    .title("Cambridge Surprise Minor")
+                    .band("Gina", "Bob", "Carol", "Dan", "Erin", "Frank")
+                    .conductor("Bob")
+                    .build());
+            List<Place> board = leaderboard(rung, Options.DEFAULT.withOrdering(Ordering.METHODS));
+            assertThat(board).extracting(Place::name).startsWith("Bob", "Carol", "Dan", "Erin", "Frank", "Gina");
+            assertThat(board.get(0).score()).isEqualTo(2);
+            assertThat(board)
+                    .filteredOn(line -> line.name().equals("Alice"))
+                    .extracting(Place::score)
+                    .containsExactly(1L);
+        }
+
+        @Test
+        void ordersByQuartersLeavingThePealOut() {
+            List<Place> board = leaderboard(records(), Options.DEFAULT.withOrdering("quarters"));
+            assertThat(board.get(0).score()).isEqualTo(2);
+            assertThat(board)
+                    .filteredOn(line -> line.name().equals("Gina"))
+                    .extracting(Place::score)
+                    .containsExactly(1L);
         }
 
         @Test

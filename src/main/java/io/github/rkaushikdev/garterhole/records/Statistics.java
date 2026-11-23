@@ -46,8 +46,21 @@ public final class Statistics {
      * @param name the ringer
      * @param totals what they rang, added up
      * @param conducted how many of those they conducted
+     * @param methods how many different method titles they rang
      */
-    public record RingerLine(String name, Totals totals, int conducted) {}
+    public record RingerLine(String name, Totals totals, int conducted, int methods) {
+
+        /**
+         * A line with no count of methods, for a ringer whose methods were not counted.
+         *
+         * @param name the ringer
+         * @param totals what they rang
+         * @param conducted how many they conducted
+         */
+        public RingerLine(String name, Totals totals, int conducted) {
+            this(name, totals, conducted, 0);
+        }
+    }
 
     /**
      * What one tower had rung in it.
@@ -110,9 +123,14 @@ public final class Statistics {
             }
         }
         List<RingerLine> lines = new ArrayList<>();
-        byName.forEach((name, theirs) -> lines.add(new RingerLine(name, totals(theirs), (int) theirs.stream()
-                .filter(rung -> rung.conductor().equals(Optional.of(name)))
-                .count())));
+        byName.forEach((name, theirs) -> {
+            int conducted = (int) theirs.stream()
+                    .filter(rung -> rung.conductor().equals(Optional.of(name)))
+                    .count();
+            int methods =
+                    (int) theirs.stream().map(Performance::title).distinct().count();
+            lines.add(new RingerLine(name, totals(theirs), conducted, methods));
+        });
         return CollectionHelpers.sortBy(
                 lines,
                 Comparator.comparingInt((RingerLine line) -> -line.totals().performances())

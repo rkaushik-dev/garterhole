@@ -113,6 +113,14 @@ class StatisticsTest {
         }
 
         @Test
+        void countsTheDifferentMethodsEachRang() {
+            assertThat(ringer("Alice").methods()).isEqualTo(3);
+            assertThat(ringer("Gina").methods()).isEqualTo(2);
+            assertThat(new RingerLine("Nobody", new Totals(0, 0, 0, 0, 0), 0).methods())
+                    .isZero();
+        }
+
+        @Test
         void sortsByHowMuchEachRang() {
             List<RingerLine> lines = byRinger(records());
             assertThat(lines.get(0).totals().performances())
