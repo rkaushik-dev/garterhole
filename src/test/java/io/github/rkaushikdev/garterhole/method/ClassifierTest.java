@@ -6,6 +6,7 @@ import static io.github.rkaushikdev.garterhole.method.Classifier.crossSections;
 import static io.github.rkaushikdev.garterhole.method.Classifier.isDifferential;
 import static io.github.rkaushikdev.garterhole.method.Classifier.isLittle;
 import static io.github.rkaushikdev.garterhole.method.Classifier.makesInternalPlace;
+import static io.github.rkaushikdev.garterhole.method.Classifier.ringsEvenly;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -43,6 +44,11 @@ class ClassifierTest {
     /** Written for the tests: two hunt bells and working bells in cycles of different length. */
     private static Method differential() {
         return Method.of("Test Differential", 8, "x38x18x12x18,18");
+    }
+
+    /** Written for the tests: the treble plain hunts but leads for four blows, twice as long as anywhere else. */
+    private static Method hybrid() {
+        return Method.of("Test", 6, "1236.56.16.12.36.14.16,12");
     }
 
     /** Written for the tests: every bell hunts and nothing dodges. */
@@ -132,7 +138,45 @@ class ClassifierTest {
     }
 
     @Nested
+    class RingsEvenly {
+
+        @Test
+        void holdsForEveryTidyFamilyOfHuntBellPath() {
+            assertThat(ringsEvenly(PLAIN_BOB_MAJOR, 1)).isTrue();
+            assertThat(ringsEvenly(CAMBRIDGE_MAJOR, 1)).isTrue();
+            assertThat(ringsEvenly(KENT_MAJOR, 1)).isTrue();
+            assertThat(ringsEvenly(DOUBLE_NORWICH, 1)).isTrue();
+        }
+
+        @Test
+        void countsOnlyThePlacesALittleTrebleReaches() {
+            assertThat(HuntBells.blowsInEachPlace(LITTLE_BOB_MAJOR, 1)).containsExactly(2, 2, 2, 2, 0, 0, 0, 0);
+            assertThat(ringsEvenly(LITTLE_BOB_MAJOR, 1)).isTrue();
+        }
+
+        @Test
+        void failsATrebleThatLingersAtTheFront() {
+            assertThat(HuntBells.blowsInEachPlace(hybrid(), 1)).containsExactly(4, 2, 2, 2, 2, 2);
+            assertThat(ringsEvenly(hybrid(), 1)).isFalse();
+        }
+
+        @Test
+        void failsAHuntBellThatHurriesThroughTheFront() {
+            assertThat(HuntBells.blowsInEachPlace(differential(), 4)).containsExactly(0, 0, 2, 2, 3, 3, 3, 3);
+            assertThat(ringsEvenly(differential(), 4)).isFalse();
+        }
+    }
+
+    @Nested
     class BaseClass {
+
+        @Test
+        void callsAMethodHybridWhenItsTrebleDoesNotRingEvenly() {
+            assertThat(baseClass(hybrid())).isEqualTo("Hybrid");
+            assertThat(classify(hybrid()).huntPath()).contains(HuntPath.PLAIN);
+            assertThat(Title.of(hybrid())).isEqualTo("Test Hybrid Minor");
+            assertThat(Title.parse(Title.of(hybrid())).className()).isEqualTo("Hybrid");
+        }
 
         @Test
         void callsAPlainMethodWithDodgesABobMethod() {
@@ -196,7 +240,8 @@ class ClassifierTest {
 
         @Test
         void putsDifferentialInFrontOfTheClassName() {
-            assertThat(classify(differential()).className()).isEqualTo("Differential Alliance");
+            assertThat(classify(differential()).className()).isEqualTo("Differential Hybrid");
+            assertThat(classify(differential()).differential()).isTrue();
         }
 
         @Test

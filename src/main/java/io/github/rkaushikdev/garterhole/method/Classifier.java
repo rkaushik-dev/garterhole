@@ -84,31 +84,46 @@ public final class Classifier {
     }
 
     /**
+     * True when the bell rings the same number of blows in every place it
+     * reaches over a lead. A treble that hunts, dodges or makes places in
+     * the same measure everywhere does; one that lingers at the front and
+     * hurries through the back does not, and that is what makes a method
+     * Hybrid rather than anything tidier. Only the places the bell reaches
+     * are counted, so a little method is not marked down for never reaching
+     * the back.
+     *
+     * @param method a method
+     * @param bell the bell, usually the hunt bell
+     * @return true when every place it reaches gets the same share of the lead
+     */
+    public static boolean ringsEvenly(Method method, int bell) {
+        List<Integer> path = HuntBells.pathOf(method, bell);
+        List<Integer> blows = HuntBells.blowsInEachPlace(method, bell);
+        Set<Integer> shares = new HashSet<>(blows.subList(Collections.min(path) - 1, Collections.max(path)));
+        return shares.size() == 1;
+    }
+
+    /**
      * The class name a method belongs to, without the Little and Differential
      * prefixes.
      *
      * @param method a method
-     * @return for example {@code Surprise}, {@code Bob} or {@code Principle}
+     * @return for example {@code Surprise}, {@code Bob}, {@code Hybrid} or {@code Principle}
      * @throws IllegalArgumentException when there is no method
      */
     public static String baseClass(Method method) {
-        HuntBells.requireMethod(method);
-        List<Integer> hunts = HuntBells.huntBells(method);
-        if (hunts.isEmpty()) {
-            return "Principle";
-        }
-        int principal = hunts.get(0);
-        List<Integer> path = HuntBells.pathOf(method, principal);
-        return switch (HuntBells.huntPathKind(method, principal)) {
-            case PLAIN -> hasWorkingDodges(method) ? "Bob" : "Place";
-            case TREBLE_BOB -> trebleBobFamily(method, path);
-            case TREBLE_PLACE -> HuntBells.dodgePlaces(path, method.stage()).isEmpty() ? "Treble Place" : "Alliance";
-        };
+        return classify(method).base();
     }
 
     /**
      * The full classification, including the prefixes and the parts that went
      * into the decision.
+     *
+     * <p>The hunt bell is looked at in two steps. First whether it rings evenly,
+     * the same number of blows in each place it reaches, because a method whose
+     * treble does not is Hybrid whatever else its path does. Then, for one that
+     * does, the shape of the path decides between the plain, the treble dodging
+     * and the treble place families.
      *
      * @param method a method
      * @return the classification
@@ -117,9 +132,15 @@ public final class Classifier {
     public static Classification classify(Method method) {
         HuntBells.requireMethod(method);
         List<Integer> hunts = HuntBells.huntBells(method);
-        String base = baseClass(method);
-        boolean little = !hunts.isEmpty() && isLittle(method, hunts.get(0));
         boolean differential = isDifferential(method);
+        if (hunts.isEmpty()) {
+            String name = differential ? "Differential Principle" : "Principle";
+            return new Classification(name, "Principle", false, differential, hunts, Optional.empty());
+        }
+        int principal = hunts.get(0);
+        HuntPath shape = HuntBells.huntPathKind(method, principal);
+        String base = ringsEvenly(method, principal) ? familyClass(method, principal, shape) : "Hybrid";
+        boolean little = isLittle(method, principal);
         List<String> parts = new ArrayList<>();
         if (differential) {
             parts.add("Differential");
@@ -127,12 +148,17 @@ public final class Classifier {
         if (little) {
             parts.add("Little");
         }
-        if (!base.isEmpty()) {
-            parts.add(base);
-        }
-        Optional<HuntPath> huntPath =
-                hunts.isEmpty() ? Optional.empty() : Optional.of(HuntBells.huntPathKind(method, hunts.get(0)));
-        return new Classification(String.join(" ", parts), base, little, differential, hunts, huntPath);
+        parts.add(base);
+        return new Classification(String.join(" ", parts), base, little, differential, hunts, Optional.of(shape));
+    }
+
+    private static String familyClass(Method method, int principal, HuntPath shape) {
+        List<Integer> path = HuntBells.pathOf(method, principal);
+        return switch (shape) {
+            case PLAIN -> hasWorkingDodges(method) ? "Bob" : "Place";
+            case TREBLE_BOB -> trebleBobFamily(method, path);
+            case TREBLE_PLACE -> HuntBells.dodgePlaces(path, method.stage()).isEmpty() ? "Treble Place" : "Alliance";
+        };
     }
 
     /**
