@@ -363,7 +363,7 @@ public final class PerformanceCollection implements Iterable<Performance> {
         }
 
         private static Optional<Title.Parts> parts(Performance rung) {
-            return Title.isWellFormed(rung.title()) ? Optional.of(Title.parse(rung.title())) : Optional.empty();
+            return Title.tryParse(rung.title());
         }
     }
 }

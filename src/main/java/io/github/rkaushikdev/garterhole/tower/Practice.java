@@ -139,12 +139,7 @@ public final class Practice {
         requireSetting(setting);
         List<Candidate> found = new ArrayList<>();
         for (String title : setting.competency().titles()) {
-            int stage;
-            try {
-                stage = Title.parse(title).stage();
-            } catch (GarterholeException | IllegalArgumentException unreadable) {
-                continue;
-            }
+            int stage = Title.tryParse(title).map(Title.Parts::stage).orElse(0);
             if (!setting.tower().canRing(stage)) {
                 continue;
             }

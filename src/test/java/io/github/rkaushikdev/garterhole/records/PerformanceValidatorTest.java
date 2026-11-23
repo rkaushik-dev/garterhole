@@ -230,6 +230,35 @@ class PerformanceValidatorTest {
     }
 
     @Nested
+    class SplicedTitles {
+
+        @Test
+        void passesASplicedQuarterThatSaysHowManyMethods() {
+            Verdict verdict = check(fields -> fields.title("Spliced Surprise Minor (7m)"));
+            assertThat(verdict.problems()).isEmpty();
+            assertThat(verdict.warnings()).isEmpty();
+        }
+
+        @Test
+        void refusesASplicedCountOfOne() {
+            Verdict verdict = check(fields -> fields.title("Spliced Surprise Minor (1m)"));
+            assertThat(verdict.problems())
+                    .containsExactly("\"Spliced Surprise Minor (1m)\" splices 1 method, and spliced needs two or more");
+            assertThat(check(fields -> fields.title("Surprise Minor (0m)"))
+                            .problems()
+                            .get(0))
+                    .endsWith("splices 0 methods, and spliced needs two or more");
+        }
+
+        @Test
+        void warnsWhenASplicedTitleGivesNoCount() {
+            assertThat(check(fields -> fields.title("Spliced Surprise Minor")).warnings())
+                    .containsExactly("\"Spliced Surprise Minor\" does not say how many methods were spliced,"
+                            + " for example (8m)");
+        }
+    }
+
+    @Nested
     class ValidateAll {
 
         @Test

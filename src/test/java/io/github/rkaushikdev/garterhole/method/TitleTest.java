@@ -100,6 +100,57 @@ class TitleTest {
     }
 
     @Nested
+    class SplicedTitles {
+
+        @Test
+        void readsTheMethodCountOffTheEnd() {
+            assertThat(Title.parse("Spliced Surprise Major (8m)")).isEqualTo(new Title.Parts("Spliced", "Surprise", 8));
+            assertThat(Title.methodCount("Spliced Surprise Major (8m)")).hasValue(8);
+            assertThat(Title.methodCount("Spliced Surprise Royal (23 methods)")).hasValue(23);
+            assertThat(Title.methodCount("Surprise Minor (1 method)")).hasValue(1);
+            assertThat(Title.methodCount("Cambridge Surprise Major")).isEmpty();
+        }
+
+        @Test
+        void knowsASplicedTitleByItsNameOrItsCount() {
+            assertThat(Title.isSpliced("Spliced Surprise Major")).isTrue();
+            assertThat(Title.isSpliced("Surprise Minor (7m)")).isTrue();
+            assertThat(Title.isSpliced("Spliced Plain Bob and Grandsire Triples"))
+                    .isTrue();
+            assertThat(Title.isSpliced("Splicedwell Surprise Major")).isFalse();
+            assertThat(Title.isSpliced("Surprise Minor (1m)")).isFalse();
+            assertThat(Title.isSpliced("nonsense")).isFalse();
+        }
+
+        @Test
+        void stillRefusesACountWithNoTitleInFrontOfIt() {
+            assertThatThrownBy(() -> Title.parse("(8m)")).hasMessage("a title cannot be blank");
+            assertThatThrownBy(() -> Title.parse("Surprise (8m)"))
+                    .hasMessageContaining("does not end with the name of a stage");
+        }
+    }
+
+    @Nested
+    class TryParse {
+
+        @Test
+        void givesThePartsOrNothing() {
+            assertThat(Title.tryParse("Stedman Triples")).contains(new Title.Parts("Stedman", "Principle", 7));
+            assertThat(Title.tryParse("Triples")).isEmpty();
+            assertThat(Title.tryParse("triples")).isEmpty();
+            assertThat(Title.tryParse("Cambridge Surprise major")).isEmpty();
+            assertThat(Title.tryParse(null)).isEmpty();
+        }
+
+        @Test
+        void tellsABareStageInAnyCaseFromATitleWithNoStage() {
+            assertThatThrownBy(() -> Title.parse("MAJOR")).hasMessageContaining("nothing but a stage name");
+            assertThatThrownBy(() -> Title.parse("Grandsire")).hasMessageContaining("does not end with");
+            assertThatThrownBy(() -> Title.parse("Little Bob")).hasMessageContaining("does not end with");
+        }
+    }
+
+    @Nested
     class IsWellFormedTitle {
 
         @Test

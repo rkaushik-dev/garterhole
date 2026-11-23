@@ -6,8 +6,12 @@ import io.github.rkaushikdev.garterhole.core.Stage;
 import io.github.rkaushikdev.garterhole.util.Json;
 import io.github.rkaushikdev.garterhole.util.Text;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Method titles.
@@ -30,6 +34,11 @@ public final class Title {
     private static final List<String> MODIFIERS = List.of("Differential", "Little");
 
     private static final String PRINCIPLE = "Principle";
+
+    private static final String SPLICED = "Spliced";
+
+    /** The method count a report writes after a spliced title, {@code (8m)} or {@code (8 methods)}. */
+    private static final Pattern METHOD_COUNT = Pattern.compile("\\s*\\((\\d+)\\s*(?:m|methods?)\\)$");
 
     private Title() {}
 
@@ -92,10 +101,14 @@ public final class Title {
     }
 
     /**
-     * Read a title apart. The stage comes off the end first, then any class word
-     * and its modifiers, and whatever is left is the name. Some titles have no
-     * name of their own at all, {@code Little Bob Major} being one, and those
-     * give back an empty name rather than an error.
+     * Read a title apart. The title is read a word at a time from the end: a
+     * spliced title's method count first, written {@code (8m)} or
+     * {@code (8 methods)}, then the stage, then any class word and the
+     * modifiers in front of it, and whatever is left is the name. Some titles
+     * have no name of their own at all, {@code Little Bob Major} being one,
+     * and those give back an empty name rather than an error. A spliced title
+     * reads like any other: {@code Spliced Surprise Major (8m)} has the name
+     * {@code Spliced}.
      *
      * @param title the title
      * @return its parts
@@ -103,25 +116,40 @@ public final class Title {
      *     or is nothing but a stage name
      */
     public static Parts parse(String title) {
-        String text = Text.squash(title == null ? "" : title);
+        String text =
+                METHOD_COUNT.matcher(Text.squash(title == null ? "" : title)).replaceFirst("");
         if (text.isEmpty()) {
             throw new ValidationException("a title cannot be blank");
         }
-        OptionalInt found = trailingStage(text);
-        if (found.isEmpty()) {
+        List<String> words = new ArrayList<>(List.of(text.split(" ")));
+        String last = words.remove(words.size() - 1);
+        OptionalInt stage = stageNamed(last);
+        if (stage.isEmpty()) {
+            if (words.isEmpty() && isBareStage(last)) {
+                throw new ValidationException(Json.quote(title) + " is nothing but a stage name");
+            }
             throw new ValidationException(Json.quote(title) + " does not end with the name of a stage");
         }
-        int stage = found.getAsInt();
-        String rest =
-                Text.trim(text.substring(0, text.length() - Stage.name(stage).length()));
-        String className = trailingClass(rest);
-        if (!className.isEmpty()) {
-            rest = Text.trim(rest.substring(0, rest.length() - className.length()));
-        }
-        if (rest.isEmpty() && className.isEmpty()) {
+        List<String> className = classWordsAtTheEnd(words);
+        if (words.isEmpty() && className.isEmpty()) {
             throw new ValidationException(Json.quote(title) + " is nothing but a stage name");
         }
-        return new Parts(rest, className.isEmpty() ? PRINCIPLE : className, stage);
+        return new Parts(
+                String.join(" ", words),
+                className.isEmpty() ? PRINCIPLE : String.join(" ", className),
+                stage.getAsInt());
+    }
+
+    /**
+     * @param title a title
+     * @return its parts, or nothing when it does not have the shape a title should have
+     */
+    public static Optional<Parts> tryParse(String title) {
+        try {
+            return Optional.of(parse(title));
+        } catch (GarterholeException notATitle) {
+            return Optional.empty();
+        }
     }
 
     /**
@@ -129,50 +157,68 @@ public final class Title {
      * @return true when the title has the shape a title should have
      */
     public static boolean isWellFormed(String title) {
+        return tryParse(title).isPresent();
+    }
+
+    /**
+     * How many methods a spliced title says were rung, from the count a
+     * report writes after it.
+     *
+     * @param title a title, for example {@code Spliced Surprise Major (8m)}
+     * @return the count, or nothing when the title gives none
+     */
+    public static OptionalInt methodCount(String title) {
+        Matcher found = METHOD_COUNT.matcher(Text.squash(title == null ? "" : title));
+        return found.find() ? OptionalInt.of(Integer.parseInt(found.group(1))) : OptionalInt.empty();
+    }
+
+    /**
+     * @param title a title
+     * @return true when it is a title of spliced: it says so, or it counts more than one method
+     */
+    public static boolean isSpliced(String title) {
+        boolean named = tryParse(title)
+                .map(parts -> parts.name().equals(SPLICED) || parts.name().startsWith(SPLICED + " "))
+                .orElse(false);
+        return named || methodCount(title).orElse(1) > 1;
+    }
+
+    private static OptionalInt stageNamed(String word) {
+        for (int stage : Stage.supported()) {
+            if (Stage.name(stage).equals(word)) {
+                return OptionalInt.of(stage);
+            }
+        }
+        return OptionalInt.empty();
+    }
+
+    private static boolean isBareStage(String word) {
         try {
-            parse(title);
+            Stage.fromName(word);
             return true;
-        } catch (GarterholeException notATitle) {
+        } catch (IllegalArgumentException notAStage) {
             return false;
         }
     }
 
-    private static OptionalInt trailingStage(String text) {
-        for (int stage : Stage.supported()) {
-            if (text.endsWith(" " + Stage.name(stage))) {
-                return OptionalInt.of(stage);
-            }
-        }
-        try {
-            return OptionalInt.of(Stage.fromName(text));
-        } catch (IllegalArgumentException notAStage) {
-            return OptionalInt.empty();
-        }
-    }
-
-    /** The class words at the end of the text, or an empty string. */
-    private static String trailingClass(String text) {
+    /**
+     * Take the class words and their modifiers off the end of the words, and
+     * give them back in order. A two word class is tried before a one word
+     * one, so that Treble Bob is not read as Bob.
+     */
+    private static List<String> classWordsAtTheEnd(List<String> words) {
+        LinkedList<String> found = new LinkedList<>();
         for (String word : CLASS_WORDS) {
-            if (text.equals(word) || text.endsWith(" " + word)) {
-                return withModifiers(text, word);
+            List<String> wanted = List.of(word.split(" "));
+            int from = words.size() - wanted.size();
+            if (from >= 0 && words.subList(from, words.size()).equals(wanted)) {
+                found.addAll(wanted);
+                words.subList(from, words.size()).clear();
+                break;
             }
         }
-        return "";
-    }
-
-    private static String withModifiers(String text, String word) {
-        String found = word;
-        String head = Text.trim(text.substring(0, text.length() - found.length()));
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            for (String modifier : MODIFIERS) {
-                if (head.equals(modifier) || head.endsWith(" " + modifier)) {
-                    found = modifier + " " + found;
-                    head = Text.trim(head.substring(0, head.length() - modifier.length()));
-                    changed = true;
-                }
-            }
+        while (!found.isEmpty() && !words.isEmpty() && MODIFIERS.contains(words.get(words.size() - 1))) {
+            found.addFirst(words.remove(words.size() - 1));
         }
         return found;
     }

@@ -1,6 +1,5 @@
 package io.github.rkaushikdev.garterhole.records;
 
-import io.github.rkaushikdev.garterhole.GarterholeException;
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.composition.Lengths;
 import io.github.rkaushikdev.garterhole.method.Title;
@@ -214,17 +213,9 @@ public final class Statistics {
     private static List<Title.Parts> readableTitles(Iterable<Performance> records) {
         List<Title.Parts> parts = new ArrayList<>();
         for (Performance rung : collect(records)) {
-            readTitle(rung.title()).ifPresent(parts::add);
+            Title.tryParse(rung.title()).ifPresent(parts::add);
         }
         return parts;
-    }
-
-    private static Optional<Title.Parts> readTitle(String title) {
-        try {
-            return Optional.of(Title.parse(title));
-        } catch (GarterholeException | IllegalArgumentException unreadable) {
-            return Optional.empty();
-        }
     }
 
     /**

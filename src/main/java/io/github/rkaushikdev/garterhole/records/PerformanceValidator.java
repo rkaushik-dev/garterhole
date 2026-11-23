@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -66,6 +67,7 @@ public final class PerformanceValidator {
             PerformanceValidator::conductorRecorded,
             PerformanceValidator::notInTheFuture,
             PerformanceValidator::lengthClaimed,
+            PerformanceValidator::splicedCount,
             (rung, options) -> speedWarnings(rung).stream().map(Note::warning).toList(),
             (rung, options) ->
                     footnoteWarnings(rung).stream().map(Note::warning).toList());
@@ -299,5 +301,23 @@ public final class PerformanceValidator {
                         Lengths.checkLength(rung.changes(), rung.stage(), claim).reason())
                 .map(reason -> List.of(Note.problem(reason)))
                 .orElse(List.of());
+    }
+
+    /**
+     * A spliced title says how many methods went into it. A count of one is
+     * not spliced at all, and a title that says spliced with no count is
+     * missing what a reader looks for first.
+     */
+    private static List<Note> splicedCount(Performance rung, Options options) {
+        OptionalInt count = Title.methodCount(rung.title());
+        if (count.isPresent() && count.getAsInt() < 2) {
+            return List.of(Note.problem(Json.quote(rung.title()) + " splices " + count.getAsInt() + " method"
+                    + (count.getAsInt() == 1 ? "" : "s") + ", and spliced needs two or more"));
+        }
+        if (count.isEmpty() && Title.isSpliced(rung.title())) {
+            return List.of(Note.warning(
+                    Json.quote(rung.title()) + " does not say how many methods were spliced, for example (8m)"));
+        }
+        return List.of();
     }
 }
