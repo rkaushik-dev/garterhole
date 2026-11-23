@@ -5,10 +5,13 @@ import io.github.rkaushikdev.garterhole.core.Row;
 import io.github.rkaushikdev.garterhole.core.Stage;
 import io.github.rkaushikdev.garterhole.util.Json;
 import io.github.rkaushikdev.garterhole.validation.Coerce;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.IntUnaryOperator;
 
 /**
  * Calling positions. A conductor says "wrong" rather than "a bob at the end of
@@ -26,17 +29,71 @@ import java.util.Map;
  */
 public final class CallingPosition {
 
-    private static final Map<String, String> NAMES = Map.of(
-            "B", "Before",
-            "I", "In",
-            "O", "Out",
-            "F", "Fourths",
-            "V", "Fifths",
-            "M", "Middle",
-            "W", "Wrong",
-            "H", "Home");
+    /**
+     * The named positions, front to back, each with the place it sits at on a
+     * stage. Where two land on the same place the later one in this list wins.
+     */
+    public enum Position {
+        /** The observation bell leading: Before. */
+        BEFORE("B", "Before", stage -> 1),
+        /** In seconds: In. */
+        IN("I", "In", stage -> 2),
+        /** In thirds: Out. */
+        OUT("O", "Out", stage -> 3),
+        /** In fourths: Fourths. */
+        FOURTHS("F", "Fourths", stage -> 4),
+        /** In fifths: Fifths. */
+        FIFTHS("V", "Fifths", stage -> 5),
+        /** Four places from the back: Middle. */
+        MIDDLE("M", "Middle", stage -> stage - 4),
+        /** Two places from the back: Wrong. */
+        WRONG("W", "Wrong", stage -> stage - 2),
+        /** At the back: Home. */
+        HOME("H", "Home", stage -> stage);
 
-    /** A place written as a number, the way an unnamed position is written. */
+        private final String code;
+        private final String longName;
+        private final IntUnaryOperator place;
+
+        Position(String code, String longName, IntUnaryOperator place) {
+            this.code = code;
+            this.longName = longName;
+            this.place = place;
+        }
+
+        /**
+         * @return the one letter code, for example {@code W}
+         */
+        public String code() {
+            return code;
+        }
+
+        /**
+         * @return the long name, for example {@code Wrong}
+         */
+        public String longName() {
+            return longName;
+        }
+
+        /**
+         * @param stage a stage
+         * @return the place the position sits at on that stage, which may be outside it
+         */
+        public int placeAt(int stage) {
+            return place.applyAsInt(stage);
+        }
+
+        /**
+         * @param code a one letter code
+         * @return the position with that code, when there is one
+         */
+        public static Optional<Position> withCode(String code) {
+            return Arrays.stream(values())
+                    .filter(each -> each.code.equals(code))
+                    .findFirst();
+        }
+    }
+
     private CallingPosition() {}
 
     /**
@@ -58,21 +115,13 @@ public final class CallingPosition {
      */
     public static Map<String, Integer> positionPlaces(int stage) {
         requireStage(stage);
-        Map<String, Integer> wanted = new LinkedHashMap<>();
-        wanted.put("B", 1);
-        wanted.put("I", 2);
-        wanted.put("O", 3);
-        wanted.put("F", 4);
-        wanted.put("V", 5);
-        wanted.put("M", stage - 4);
-        wanted.put("W", stage - 2);
-        wanted.put("H", stage);
         Map<String, Integer> places = new LinkedHashMap<>();
-        wanted.forEach((code, place) -> {
+        for (Position position : Position.values()) {
+            int place = position.placeAt(stage);
             if (place >= 1 && place <= stage) {
-                places.put(code, place);
+                places.put(position.code(), place);
             }
-        });
+        }
         return Collections.unmodifiableMap(places);
     }
 
@@ -134,7 +183,7 @@ public final class CallingPosition {
      * @return the long name of the code, or the code itself when it has none
      */
     public static String positionName(String code) {
-        return NAMES.getOrDefault(code, code);
+        return Position.withCode(code).map(Position::longName).orElse(code);
     }
 
     /**

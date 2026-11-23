@@ -186,4 +186,24 @@ class CallingPositionTest {
             assertThatThrownBy(() -> positionOfCall(parseRow("123456"), 8)).hasMessageContaining("not in a row of 6");
         }
     }
+
+    @Nested
+    class Positions {
+
+        @Test
+        void carryTheirCodeTheirNameAndWhereTheySit() {
+            assertThat(CallingPosition.Position.WRONG.code()).isEqualTo("W");
+            assertThat(CallingPosition.Position.WRONG.longName()).isEqualTo("Wrong");
+            assertThat(CallingPosition.Position.WRONG.placeAt(8)).isEqualTo(6);
+            assertThat(CallingPosition.Position.MIDDLE.placeAt(10)).isEqualTo(6);
+            assertThat(CallingPosition.Position.HOME.placeAt(12)).isEqualTo(12);
+        }
+
+        @Test
+        void areFoundByTheirCode() {
+            assertThat(CallingPosition.Position.withCode("V")).contains(CallingPosition.Position.FIFTHS);
+            assertThat(CallingPosition.Position.withCode("Z")).isEmpty();
+            assertThat(CallingPosition.positionName("7")).isEqualTo("7");
+        }
+    }
 }
