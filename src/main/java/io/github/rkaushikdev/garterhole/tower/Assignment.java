@@ -39,6 +39,7 @@ public final class Assignment {
      * @param competency what the band can ring, or {@code null} when it does not matter
      * @param level the level a ringer must be at in the method, or {@code null} for inside
      * @param conductor true when somebody on the bells has to be able to conduct
+     * @param ring which end of the tower's ring to ring on when it has more bells than are needed
      */
     public record Request(
             Tower tower,
@@ -47,7 +48,8 @@ public final class Assignment {
             String title,
             CompetencyRegister competency,
             Level level,
-            boolean conductor) {
+            boolean conductor,
+            Ring ring) {
 
         /**
          * @param tower the tower
@@ -56,7 +58,7 @@ public final class Assignment {
          * @return a request that does not care what method is rung
          */
         public static Request of(Tower tower, List<Ringer> band, int stage) {
-            return new Request(tower, band, stage, null, null, null, false);
+            return new Request(tower, band, stage, null, null, null, false, Ring.FRONT);
         }
 
         /**
@@ -65,7 +67,7 @@ public final class Assignment {
          * @return this request, putting only those who know the method on the bells
          */
         public Request withMethod(String method, CompetencyRegister register) {
-            return new Request(tower, band, stage, method, register, level, conductor);
+            return new Request(tower, band, stage, method, register, level, conductor, ring);
         }
 
         /**
@@ -73,15 +75,34 @@ public final class Assignment {
          * @return this request at that level
          */
         public Request withLevel(Level atLeast) {
-            return new Request(tower, band, stage, title, competency, atLeast, conductor);
+            return new Request(tower, band, stage, title, competency, atLeast, conductor, ring);
         }
 
         /**
          * @return this request, refusing a band with nobody on the bells to conduct
          */
         public Request requiringConductor() {
-            return new Request(tower, band, stage, title, competency, level, true);
+            return new Request(tower, band, stage, title, competency, level, true, ring);
         }
+
+        /**
+         * Six on an eight are usually rung on the back six, which are in the
+         * key of the ring and heavy enough to sound like a peal; the front six
+         * are lighter and are not in any key.
+         *
+         * @return this request ringing on the heaviest bells the stage needs
+         */
+        public Request onTheBackBells() {
+            return new Request(tower, band, stage, title, competency, level, conductor, Ring.BACK);
+        }
+    }
+
+    /** Which end of a tower's ring a band rings on when it has more bells than are needed. */
+    public enum Ring {
+        /** The lightest bells, from the treble. */
+        FRONT,
+        /** The heaviest bells, down to the tenor. */
+        BACK
     }
 
     /**
@@ -115,10 +136,11 @@ public final class Assignment {
 
     /**
      * The bells that have to be filled: the stage, plus a cover when the stage
-     * is odd and the tower has a bell spare.
+     * is odd and the tower has a bell spare, taken from the front of the ring
+     * or the back as the request says.
      *
      * @param request what is to be rung
-     * @return the bell numbers, treble first
+     * @return the bell numbers, the lightest first
      * @throws ValidationException when the request cannot be used or the tower cannot ring the stage
      */
     public static List<Integer> ringingBells(Request request) {
@@ -129,11 +151,8 @@ public final class Assignment {
             throw new ValidationException(tower.name() + " cannot ring " + stage + " bells");
         }
         int count = tower.canCover(stage) ? stage + 1 : stage;
-        List<Integer> bells = new ArrayList<>(count);
-        for (int number = 1; number <= count; number += 1) {
-            bells.add(number);
-        }
-        return List.copyOf(bells);
+        List<Bell> rung = request.ring() == Ring.BACK ? tower.backBells(count) : tower.frontBells(count);
+        return rung.stream().map(Bell::number).toList();
     }
 
     /**

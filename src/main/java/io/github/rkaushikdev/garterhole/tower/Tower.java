@@ -157,6 +157,28 @@ public final class Tower {
     }
 
     /**
+     * The lightest bells, the way a band says the front six.
+     *
+     * @param count how many
+     * @return the bells from the treble, treble first
+     * @throws ValidationException when the tower has fewer bells than that
+     */
+    public List<Bell> frontBells(int count) {
+        return bells.subList(0, checkedCount(count));
+    }
+
+    /**
+     * The heaviest bells, the way a band says the back eight.
+     *
+     * @param count how many
+     * @return the bells down to the tenor, the lightest of them first
+     * @throws ValidationException when the tower has fewer bells than that
+     */
+    public List<Bell> backBells(int count) {
+        return bells.subList(bells.size() - checkedCount(count), bells.size());
+    }
+
+    /**
      * @param stage a number of bells
      * @return true when a method at this stage can be rung here at all
      */
@@ -195,6 +217,13 @@ public final class Tower {
      */
     public int largestStage() {
         return stages().stream().findFirst().orElse(0);
+    }
+
+    private int checkedCount(int count) {
+        if (count < 1 || count > bells.size()) {
+            throw new ValidationException(name + " has " + bells.size() + " bells, not " + count + " to choose from");
+        }
+        return count;
     }
 
     /**

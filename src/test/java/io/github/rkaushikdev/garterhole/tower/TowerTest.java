@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.rkaushikdev.garterhole.NotFoundException;
+import io.github.rkaushikdev.garterhole.ValidationException;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -211,6 +212,19 @@ class TowerTest {
                             Bell.weighing(3, "6-0-0", Bell.Details.NONE.withNote("C"))));
             assertThat(tower.describe())
                     .isEqualTo("St Mary: 3 bells, tenor 6-0-0 in C, ringing up to Singles," + " 2 bells off the scale");
+        }
+
+        @Test
+        void picksTheFrontOrTheBackOfTheRing() {
+            assertThat(stMary().frontBells(6)).extracting(Bell::number).containsExactly(1, 2, 3, 4, 5, 6);
+            assertThat(stMary().backBells(6)).extracting(Bell::number).containsExactly(3, 4, 5, 6, 7, 8);
+            assertThat(stMary().backBells(8)).extracting(Bell::number).containsExactly(1, 2, 3, 4, 5, 6, 7, 8);
+        }
+
+        @Test
+        void refusesMoreBellsThanItHas() {
+            assertThatThrownBy(() -> stMary().backBells(9)).hasMessageContaining("has 8 bells, not 9");
+            assertThatThrownBy(() -> stMary().frontBells(0)).isInstanceOf(ValidationException.class);
         }
 
         @Test

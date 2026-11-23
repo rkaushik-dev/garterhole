@@ -79,6 +79,31 @@ class AssignmentTest {
         }
 
         @Test
+        void ringsTheBackBellsWhenAskedAndCoversWithTheTenor() {
+            assertThat(ringingBells(Request.of(tower(8), band(), 6).onTheBackBells()))
+                    .containsExactly(3, 4, 5, 6, 7, 8);
+            assertThat(ringingBells(Request.of(tower(8), band(), 5).onTheBackBells()))
+                    .containsExactly(3, 4, 5, 6, 7, 8);
+            assertThat(Request.of(tower(8), band(), 6).ring()).isEqualTo(Assignment.Ring.FRONT);
+        }
+
+        @Test
+        void putsTheBandOnTheBackSixOfAnEight() {
+            Assignment.Result result =
+                    Assignment.assignBells(Request.of(tower(8), band(), 6).onTheBackBells());
+            assertThat(result.assignment().keySet()).containsExactly(3, 4, 5, 6, 7, 8);
+        }
+
+        @Test
+        void keepsTheBackBellsWhenTheMethodAndLevelAreGiven() {
+            Request request = Request.of(tower(8), band(), 6)
+                    .onTheBackBells()
+                    .withLevel(CompetencyRegister.Level.INSIDE)
+                    .requiringConductor();
+            assertThat(request.ring()).isEqualTo(Assignment.Ring.BACK);
+        }
+
+        @Test
         void refusesAStageTheTowerCannotRing() {
             assertThatThrownBy(() -> ringingBells(Request.of(tower(), band(), 8)))
                     .hasMessageContaining("cannot ring 8 bells");
