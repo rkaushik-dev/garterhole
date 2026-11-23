@@ -2,6 +2,7 @@ package io.github.rkaushikdev.garterhole.striking;
 
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.core.Row;
+import io.github.rkaushikdev.garterhole.core.Stroke;
 import io.github.rkaushikdev.garterhole.striking.ErrorAccumulator.Summary;
 import io.github.rkaushikdev.garterhole.striking.RowSplitter.LenientSplit;
 import io.github.rkaushikdev.garterhole.striking.StrikingMetrics.Accuracy;
@@ -253,6 +254,20 @@ public final class StrikingSession {
      */
     public List<Boolean> strokes() {
         return RowSplitter.handstrokes(rows);
+    }
+
+    /**
+     * @return the accuracy at handstroke and at backstroke
+     */
+    public Map<Stroke, Summary> byStroke() {
+        return StrokeAccuracy.byStroke(errors);
+    }
+
+    /**
+     * @return the bells struck later at one stroke than at the other
+     */
+    public List<StrokeAccuracy.OddStruck> oddStruck() {
+        return StrokeAccuracy.oddStruck(errors);
     }
 
     /**

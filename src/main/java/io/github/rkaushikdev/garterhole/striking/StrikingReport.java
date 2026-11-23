@@ -8,7 +8,9 @@ import io.github.rkaushikdev.garterhole.util.Text;
 import io.github.rkaushikdev.garterhole.util.Text.Align;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Turning a striking analysis into something a band will read.
@@ -23,12 +25,55 @@ public final class StrikingReport {
     /** How many faults a report lists before it says how many more there were. */
     public static final int FAULT_LIMIT = 10;
 
-    private static final double EXCELLENT = 20;
-    private static final double GOOD = 40;
-    private static final double FAIR = 70;
     private static final long EVEN = 10;
 
     private StrikingReport() {}
+
+    /**
+     * The words a tower captain uses for a piece of ringing, each with the
+     * accuracy it stops at.
+     */
+    public enum Grade {
+        /** Under twenty milliseconds: a competition winning standard. */
+        EXCELLENT(20),
+        /** Under forty: good, clean ringing. */
+        GOOD(40),
+        /** Under seventy: rung through, but you could hear it. */
+        FAIR(70),
+        /** Anything worse. */
+        RAGGED(Double.POSITIVE_INFINITY);
+
+        private final double below;
+
+        Grade(double below) {
+            this.below = below;
+        }
+
+        /**
+         * @param rms a root mean square error in milliseconds
+         * @return the grade it earns
+         * @throws ValidationException when the accuracy is negative
+         */
+        public static Grade of(double rms) {
+            if (rms < 0) {
+                throw new ValidationException(Json.number(rms) + " is not a striking accuracy");
+            }
+            for (Grade grade : values()) {
+                if (rms < grade.below) {
+                    return grade;
+                }
+            }
+            return RAGGED;
+        }
+
+        /**
+         * @return the grade in words, for example {@code fair}
+         */
+        @Override
+        public String toString() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
 
     /**
      * The verdict on a session, in the words a tower captain would use.
@@ -38,19 +83,7 @@ public final class StrikingReport {
      * @throws ValidationException when the accuracy is negative
      */
     public static String verdict(double rms) {
-        if (rms < 0) {
-            throw new ValidationException(Json.number(rms) + " is not a striking accuracy");
-        }
-        if (rms < EXCELLENT) {
-            return "excellent";
-        }
-        if (rms < GOOD) {
-            return "good";
-        }
-        if (rms < FAIR) {
-            return "fair";
-        }
-        return "ragged";
+        return Grade.of(rms).toString();
     }
 
     /**
@@ -78,6 +111,30 @@ public final class StrikingReport {
             return "even";
         }
         return meanError < 0 ? size + "ms early" : size + "ms late";
+    }
+
+    /**
+     * The handstrokes and the backstrokes graded separately, which is where a
+     * band that sounds uneven without anybody being badly out finds out why.
+     *
+     * @param session the analysis
+     * @return for example {@code handstrokes good at 28ms, backstrokes fair at 45ms}
+     */
+    public static String strokeLine(StrikingSession session) {
+        requireSession(session);
+        return session.byStroke().entrySet().stream()
+                .map(entry -> entry.getKey() + "s " + Grade.of(entry.getValue().rms()) + " at "
+                        + Math.round(entry.getValue().rms()) + "ms")
+                .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * @param odd a bell that is odd struck
+     * @return a sentence a ringer will act on, for example {@code bell 5 is odd struck, 35ms late at handstroke}
+     */
+    public static String describeOddStruck(StrokeAccuracy.OddStruck odd) {
+        return "bell " + Bells.symbol(odd.bell()) + " is odd struck, " + Math.round(Math.abs(odd.difference()))
+                + "ms late at " + odd.lateStroke();
     }
 
     /**
@@ -137,7 +194,8 @@ public final class StrikingReport {
 
     /**
      * The whole report: the headline, a note when the recording stopped making
-     * sense, the bell table and the faults.
+     * sense, the bell table with the two strokes and any bell that is odd
+     * struck under it, and the faults.
      *
      * @param session the analysis
      * @return the lines of the report
@@ -149,6 +207,8 @@ public final class StrikingReport {
         session.stoppedAt().ifPresent(index -> lines.add("the recording stopped making sense at row " + (index + 1)));
         lines.add("");
         lines.addAll(bellTable(session));
+        lines.add(strokeLine(session));
+        session.oddStruck().forEach(odd -> lines.add(describeOddStruck(odd)));
         lines.add("");
         lines.addAll(faultLines(session));
         return lines;

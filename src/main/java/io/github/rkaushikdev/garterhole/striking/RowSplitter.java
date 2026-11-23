@@ -2,6 +2,7 @@ package io.github.rkaushikdev.garterhole.striking;
 
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.core.Row;
+import io.github.rkaushikdev.garterhole.core.Stroke;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -114,7 +115,17 @@ public final class RowSplitter {
      * @return true for each handstroke row
      */
     public static List<Boolean> handstrokes(List<StruckRow> rows) {
-        return rows.stream().map(row -> row.index() % 2 == 0).toList();
+        return strokes(rows).stream().map(stroke -> stroke == Stroke.HANDSTROKE).toList();
+    }
+
+    /**
+     * The stroke of each row, given that the first row of a touch is a handstroke.
+     *
+     * @param rows the struck rows
+     * @return the stroke of each, in order
+     */
+    public static List<Stroke> strokes(List<StruckRow> rows) {
+        return rows.stream().map(row -> StrokeAccuracy.strokeOf(row.index())).toList();
     }
 
     private static StruckRow struckRow(List<Strike> strikes, int index) {

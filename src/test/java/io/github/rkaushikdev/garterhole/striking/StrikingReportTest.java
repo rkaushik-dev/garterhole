@@ -39,6 +39,14 @@ class StrikingReportTest {
         }
 
         @Test
+        void gradesOnTheBoundaryAsTheWorseGrade() {
+            assertThat(StrikingReport.Grade.of(19.9)).isEqualTo(StrikingReport.Grade.EXCELLENT);
+            assertThat(StrikingReport.Grade.of(20)).isEqualTo(StrikingReport.Grade.GOOD);
+            assertThat(StrikingReport.Grade.of(70)).isEqualTo(StrikingReport.Grade.RAGGED);
+            assertThat(StrikingReport.Grade.FAIR).hasToString("fair");
+        }
+
+        @Test
         void refusesSomethingThatIsNotAnAccuracy() {
             assertThatThrownBy(() -> verdict(-1)).isInstanceOf(ValidationException.class);
             assertThatThrownBy(() -> verdict(-0.5)).hasMessageContaining("is not a striking accuracy");
