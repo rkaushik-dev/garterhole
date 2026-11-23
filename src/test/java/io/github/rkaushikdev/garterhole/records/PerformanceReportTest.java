@@ -44,6 +44,18 @@ class PerformanceReportTest {
         }
 
         @Test
+        void listsAHandbellBandOnePairToALine() {
+            List<String> lines = boardLines(quarter()
+                    .title("Plain Bob Royal")
+                    .changes(1260)
+                    .handbells(true)
+                    .band("Alice", "Bob", "Carol", "Dan", "Erin")
+                    .build());
+            assertThat(lines.get(3)).isEqualTo("on handbells");
+            assertThat(lines).contains("1-2  Alice (c)", "3-4  Bob", "9-0  Erin");
+        }
+
+        @Test
         void marksTheConductor() {
             assertThat(boardLines(quarter().build()))
                     .filteredOn(line -> line.contains("(c)"))

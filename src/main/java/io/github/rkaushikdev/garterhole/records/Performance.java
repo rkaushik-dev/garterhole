@@ -26,6 +26,10 @@ import java.util.OptionalInt;
  * because that depends on rules that change and is worked out separately by
  * {@link PerformanceValidator}.
  *
+ * <p>A performance on handbells is written the same way, but each ringer holds
+ * two bells, so the band lists one name for each pair: the first ringer has
+ * the treble and the two, the second the three and the four, and so on.
+ *
  * <p>Performances are immutable. Names are squashed to single spaces as they come
  * in, so that a ringer typed with a stray space is still the same ringer.
  */
@@ -40,6 +44,7 @@ public final class Performance {
     private final String composer;
     private final Integer duration;
     private final List<String> footnotes;
+    private final boolean handbells;
 
     private Performance(Builder definition) {
         Guards.nonEmptyString(definition.tower, "a tower name");
@@ -73,6 +78,7 @@ public final class Performance {
         this.composer = definition.composer == null ? null : squash(definition.composer);
         this.duration = definition.duration;
         this.footnotes = List.copyOf(definition.footnotes);
+        this.handbells = definition.handbells;
     }
 
     /**
@@ -104,7 +110,8 @@ public final class Performance {
                 .date(dateOf(document.path("date")))
                 .changes(wholeNumber(document.path("changes"), " is not a number of changes"))
                 .band(bandOf(document.path("band")))
-                .footnotes(footnotesOf(document.path("footnotes")));
+                .footnotes(footnotesOf(document.path("footnotes")))
+                .handbells(document.path("handbells").asBoolean(false));
         JsonNode conductor = document.path("conductor");
         if (isGiven(conductor)) {
             builder.conductor(givenText(conductor, "the conductor"));
@@ -184,6 +191,13 @@ public final class Performance {
     }
 
     /**
+     * @return true when it was rung on handbells, two bells to each ringer
+     */
+    public boolean handbells() {
+        return handbells;
+    }
+
+    /**
      * @return the stage, read out of the method title
      * @throws ValidationException when the title cannot be read
      */
@@ -200,7 +214,8 @@ public final class Performance {
     }
 
     /**
-     * @return how many rang, which is not always the stage: an odd stage has a cover
+     * @return how many rang, which is not always the stage: an odd stage has a
+     *     cover, and on handbells each ringer has two bells
      */
     public int bandSize() {
         return band.size();
@@ -225,23 +240,37 @@ public final class Performance {
 
     /**
      * @param bell a bell
-     * @return the ringer of the bell
+     * @return the ringer of the bell, who on handbells holds it with its pair
      * @throws ValidationException when nobody rang that bell
      */
     public String ringerOf(int bell) {
-        if (bell < 1 || bell > band.size()) {
+        int bells = handbells ? band.size() * 2 : band.size();
+        if (bell < 1 || bell > bells) {
             throw new ValidationException("bell " + bell + " was not rung in this performance");
         }
-        return band.get(bell - 1);
+        return band.get(handbells ? (bell - 1) / 2 : bell - 1);
     }
 
     /**
      * @param name a ringer
-     * @return the bell they rang, when they were in the band
+     * @return the bell they rang, or the lower of the pair on handbells, when they were in the band
      */
     public OptionalInt bellOf(String name) {
+        List<Integer> bells = bellsOf(name);
+        return bells.isEmpty() ? OptionalInt.empty() : OptionalInt.of(bells.get(0));
+    }
+
+    /**
+     * @param name a ringer
+     * @return the bells they rang, one in a tower and a pair on handbells, none
+     *     when they were not in the band
+     */
+    public List<Integer> bellsOf(String name) {
         int index = band.indexOf(squash(name));
-        return index == -1 ? OptionalInt.empty() : OptionalInt.of(index + 1);
+        if (index == -1) {
+            return List.of();
+        }
+        return handbells ? List.of(2 * index + 1, 2 * index + 2) : List.of(index + 1);
     }
 
     @Override
@@ -306,6 +335,7 @@ public final class Performance {
         private String composer;
         private Integer duration;
         private List<String> footnotes = List.of();
+        private boolean handbells;
 
         private Builder() {}
 
@@ -395,6 +425,15 @@ public final class Performance {
          */
         public Builder footnotes(List<String> lines) {
             this.footnotes = lines == null ? List.of() : List.copyOf(lines);
+            return this;
+        }
+
+        /**
+         * @param inHand true when it was rung on handbells, two bells to each ringer
+         * @return this builder
+         */
+        public Builder handbells(boolean inHand) {
+            this.handbells = inHand;
             return this;
         }
 

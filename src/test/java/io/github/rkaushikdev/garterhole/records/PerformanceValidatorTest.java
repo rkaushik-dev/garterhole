@@ -51,6 +51,15 @@ class PerformanceValidatorTest {
         }
 
         @Test
+        void wantsOneRingerForEachPairOnHandbells() {
+            assertThat(acceptableBandSizes(8, true)).containsExactly(4);
+            assertThat(acceptableBandSizes(7, true)).containsExactly(4);
+            assertThat(acceptableBandSizes(5, true)).containsExactly(3);
+            assertThat(acceptableBandSizes(12, true)).containsExactly(6);
+            assertThat(acceptableBandSizes(6, false)).containsExactly(6);
+        }
+
+        @Test
         void allowsACoverOnAnOddStage() {
             assertThat(acceptableBandSizes(5)).containsExactly(5, 6);
         }
@@ -65,6 +74,19 @@ class PerformanceValidatorTest {
             assertThat(verdict.ok()).isTrue();
             assertThat(verdict.problems()).isEmpty();
             assertThat(verdict.warnings()).isEmpty();
+        }
+
+        @Test
+        void passesAHandbellQuarterWithThreeRingersForMinor() {
+            Verdict verdict = check(fields -> fields.handbells(true).band("Alice", "Bob", "Carol"));
+            assertThat(verdict.problems()).isEmpty();
+        }
+
+        @Test
+        void catchesAHandbellBandRungAsIfInATower() {
+            Verdict verdict = check(fields -> fields.handbells(true));
+            assertThat(verdict.problems())
+                    .containsExactly("Plain Bob Minor on handbells needs a band of 3 and this one has 6");
         }
 
         @Test

@@ -172,6 +172,31 @@ class PerformanceTest {
         @Test
         void findsTheBellSomebodyRang() {
             assertThat(quarter().bellOf("Carol Sims")).hasValue(3);
+            assertThat(quarter().bellsOf("Carol Sims")).containsExactly(3);
+            assertThat(quarter().bellsOf("Nobody")).isEmpty();
+        }
+
+        @Test
+        void givesEachHandbellRingerAPair() {
+            Performance inHand = fields().handbells(true)
+                    .band("Alice Vane", "Bob Hart", "Carol Sims")
+                    .build();
+            assertThat(inHand.handbells()).isTrue();
+            assertThat(inHand.ringerOf(1)).isEqualTo("Alice Vane");
+            assertThat(inHand.ringerOf(2)).isEqualTo("Alice Vane");
+            assertThat(inHand.ringerOf(6)).isEqualTo("Carol Sims");
+            assertThat(inHand.bellsOf("Bob Hart")).containsExactly(3, 4);
+            assertThat(inHand.bellOf("Carol Sims")).hasValue(5);
+            assertThatThrownBy(() -> inHand.ringerOf(7)).hasMessageContaining("was not rung");
+            assertThat(quarter().handbells()).isFalse();
+        }
+
+        @Test
+        void readsAHandbellPerformanceFromADocument() {
+            ObjectNode stored = document();
+            stored.put("handbells", true);
+            assertThat(Performance.fromDocument(stored).handbells()).isTrue();
+            assertThat(Performance.fromDocument(document()).handbells()).isFalse();
         }
 
         @Test

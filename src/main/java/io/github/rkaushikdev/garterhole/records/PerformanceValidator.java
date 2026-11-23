@@ -79,12 +79,28 @@ public final class PerformanceValidator {
     }
 
     /**
-     * How many ringers a stage needs, allowing for the cover on an odd stage.
+     * How many ringers a stage needs in a tower, allowing for the cover on an odd stage.
      *
      * @param stage a number of bells
      * @return the band sizes that are acceptable
      */
     public static List<Integer> acceptableBandSizes(int stage) {
+        return acceptableBandSizes(stage, false);
+    }
+
+    /**
+     * How many ringers a stage needs. On handbells each ringer has a pair, so
+     * Major needs four; an odd stage is rung with the cover in hand too, so
+     * Triples needs four as well, and Doubles three.
+     *
+     * @param stage a number of bells
+     * @param handbells true for a handbell band
+     * @return the band sizes that are acceptable
+     */
+    public static List<Integer> acceptableBandSizes(int stage, boolean handbells) {
+        if (handbells) {
+            return List.of((Stage.bellsInTower(stage) + 1) / 2);
+        }
         return Stage.hasCover(stage) ? List.of(stage, stage + 1) : List.of(stage);
     }
 
@@ -117,10 +133,11 @@ public final class PerformanceValidator {
             return new Verdict(false, List.copyOf(problems), List.copyOf(warnings));
         }
         int stage = rung.stage();
-        List<Integer> sizes = acceptableBandSizes(stage);
+        List<Integer> sizes = acceptableBandSizes(stage, rung.handbells());
         if (!sizes.contains(rung.bandSize())) {
             String allowed = sizes.stream().map(String::valueOf).collect(Collectors.joining(" or "));
-            problems.add(rung.title() + " needs a band of " + allowed + " and this one has " + rung.bandSize());
+            String where = rung.handbells() ? " on handbells" : "";
+            problems.add(rung.title() + where + " needs a band of " + allowed + " and this one has " + rung.bandSize());
         }
         if (new HashSet<>(rung.band()).size() != rung.bandSize()) {
             problems.add("somebody is down for more than one bell");
