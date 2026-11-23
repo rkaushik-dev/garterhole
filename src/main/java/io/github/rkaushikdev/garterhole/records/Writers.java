@@ -5,6 +5,7 @@ import static io.github.rkaushikdev.garterhole.util.Text.plural;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import io.github.rkaushikdev.garterhole.ValidationException;
+import io.github.rkaushikdev.garterhole.records.Statistics.ClassCount;
 import io.github.rkaushikdev.garterhole.records.Statistics.MethodCount;
 import io.github.rkaushikdev.garterhole.records.Statistics.RingerLine;
 import io.github.rkaushikdev.garterhole.records.Statistics.Totals;
@@ -172,7 +173,7 @@ public final class Writers {
 
     /**
      * The report as lines of text: a heading, the totals, then a table each for
-     * the towers, the methods and the ringers who rang most.
+     * the towers, the methods, the classes and the ringers who rang most.
      *
      * @param records the performances
      * @param options the heading and how many ringers the last table lists
@@ -189,27 +190,36 @@ public final class Writers {
                         plural(counted.quarters(), "quarter peal"),
                         plural(counted.touches(), "touch", "touches"))));
         lines.add(counted.changes() + " changes altogether");
-        lines.add("");
-        lines.add("By tower");
-        lines.addAll(countTable(Statistics.byTower(kept), TowerLine::tower, line -> line.totals()
+        section(lines, "By tower", countTable(Statistics.byTower(kept), TowerLine::tower, line -> line.totals()
                 .performances()));
+        section(lines, "By method", countTable(Statistics.byMethod(kept), MethodCount::title, MethodCount::count));
+        section(lines, "By class", countTable(Statistics.byClass(kept), ClassCount::className, ClassCount::count));
+        section(lines, "Most rung by", ringerTable(Statistics.byRinger(kept), options.topRingers()));
+        return lines;
+    }
+
+    /** A blank line, a heading, and the table under it. */
+    private static void section(List<String> lines, String heading, List<String> table) {
         lines.add("");
-        lines.add("By method");
-        lines.addAll(countTable(Statistics.byMethod(kept), MethodCount::title, MethodCount::count));
-        lines.add("");
-        lines.add("Most rung by");
-        List<RingerLine> ringers = Statistics.byRinger(kept);
-        int end = options.topRingers() < 0 ? ringers.size() + options.topRingers() : options.topRingers();
+        lines.add(heading);
+        lines.addAll(table);
+    }
+
+    /**
+     * The ringers who rang most, as many as asked for; a negative count leaves
+     * that many off the bottom instead.
+     */
+    private static List<String> ringerTable(List<RingerLine> ringers, int wanted) {
+        int end = wanted < 0 ? ringers.size() + wanted : wanted;
         List<RingerLine> top = ringers.subList(0, Math.max(0, Math.min(ringers.size(), end)));
-        lines.addAll(Text.tabulate(
+        return Text.tabulate(
                 top.stream()
                         .map(line -> List.of(
                                 line.name(),
                                 String.valueOf(line.totals().performances()),
                                 line.conducted() == 0 ? "" : line.conducted() + " conducted"))
                         .toList(),
-                List.of(Align.LEFT, Align.RIGHT, Align.LEFT)));
-        return lines;
+                List.of(Align.LEFT, Align.RIGHT, Align.LEFT));
     }
 
     /**

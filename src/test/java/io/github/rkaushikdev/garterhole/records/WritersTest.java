@@ -75,6 +75,23 @@ class WritersTest {
         }
 
         @Test
+        void splitsTheRecordsByClassAfterTheMethods() {
+            List<String> lines = reportLines(records());
+            int byMethod = lines.indexOf("By method");
+            int byClass = lines.indexOf("By class");
+            assertThat(byClass).isGreaterThan(byMethod).isLessThan(lines.indexOf("Most rung by"));
+            assertThat(lines.get(byClass + 1)).startsWith("Bob").endsWith("2");
+            assertThat(lines.get(byClass - 1)).isEmpty();
+        }
+
+        @Test
+        void leavesOffTheBottomOfTheRingerTableWhenAskedForANegativeCount() {
+            List<String> all = reportLines(records(), Options.DEFAULT.withTopRingers(100));
+            List<String> fewer = reportLines(records(), Options.DEFAULT.withTopRingers(-2));
+            assertThat(all.size() - fewer.size()).isEqualTo(2);
+        }
+
+        @Test
         void stopsTheRingerTableAtTheNumberAskedFor() {
             List<String> lines = reportLines(records(), Options.DEFAULT.withTopRingers(2));
             int start = lines.indexOf("Most rung by");

@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.rkaushikdev.garterhole.ValidationException;
+import io.github.rkaushikdev.garterhole.records.Statistics.ClassCount;
 import io.github.rkaushikdev.garterhole.records.Statistics.MethodCount;
 import io.github.rkaushikdev.garterhole.records.Statistics.RingerLine;
 import io.github.rkaushikdev.garterhole.records.Statistics.StageCount;
@@ -134,6 +135,49 @@ class StatisticsTest {
                     .map(RingerLine::name)
                     .toList();
             assertThat(names).containsExactly("Gina", "Hal");
+        }
+    }
+
+    @Nested
+    class ByClass {
+
+        @Test
+        void countsEachClassMostFirst() {
+            assertThat(Statistics.byClass(records()))
+                    .containsExactly(new ClassCount("Bob", 3), new ClassCount("Surprise", 1));
+        }
+
+        @Test
+        void putsAPrincipleAndALittleMethodInClassesOfTheirOwn() {
+            List<Performance> rung = List.of(
+                    Performance.builder()
+                            .tower("St Mary")
+                            .date(LocalDate.of(2025, 1, 5))
+                            .title("Stedman Triples")
+                            .changes(1260)
+                            .band(EIGHT)
+                            .build(),
+                    Performance.builder()
+                            .tower("St Mary")
+                            .date(LocalDate.of(2025, 1, 6))
+                            .title("Little Bob Major")
+                            .changes(1280)
+                            .band(EIGHT)
+                            .build(),
+                    Performance.builder()
+                            .tower("St Mary")
+                            .date(LocalDate.of(2025, 1, 7))
+                            .title("Not A Title")
+                            .changes(1280)
+                            .band(EIGHT)
+                            .build());
+            assertThat(Statistics.byClass(rung))
+                    .containsExactly(new ClassCount("Little Bob", 1), new ClassCount("Principle", 1));
+        }
+
+        @Test
+        void countsNothingForNoRecords() {
+            assertThat(Statistics.byClass(List.of())).isEmpty();
         }
     }
 

@@ -79,6 +79,15 @@ public final class Statistics {
     public record MethodCount(String title, int count) {}
 
     /**
+     * How often one class of method was rung.
+     *
+     * @param className the class as a title gives it, for example {@code Surprise}
+     *     or {@code Principle}, with any {@code Little} or {@code Differential}
+     * @param count how many performances in it there were
+     */
+    public record ClassCount(String className, int count) {}
+
+    /**
      * How often one stage was rung.
      *
      * @param stage the stage
@@ -176,20 +185,46 @@ public final class Statistics {
      * @return one line per stage
      */
     public static List<StageCount> byStage(Iterable<Performance> records) {
-        Map<Integer, Integer> counts = new LinkedHashMap<>();
-        for (Performance rung : collect(records)) {
-            int stage;
-            try {
-                stage = Title.parse(rung.title()).stage();
-            } catch (GarterholeException | IllegalArgumentException unreadable) {
-                continue;
-            }
-            counts.merge(stage, 1, Integer::sum);
-        }
         List<StageCount> lines = new ArrayList<>();
-        counts.forEach((stage, count) -> lines.add(new StageCount(stage, count)));
+        CollectionHelpers.countBy(readableTitles(records), Title.Parts::stage)
+                .forEach((stage, count) -> lines.add(new StageCount(stage, count)));
         return CollectionHelpers.sortBy(
                 lines, Comparator.comparingInt(StageCount::stage).reversed());
+    }
+
+    /**
+     * How often each class of method has been rung, most first, and by name
+     * on a tie. This is the split an association's annual peal analysis is
+     * printed in: so many Surprise, so many Delight, so many Plain. A
+     * performance whose title cannot be read is left out.
+     *
+     * @param records the performances
+     * @return one line per class
+     */
+    public static List<ClassCount> byClass(Iterable<Performance> records) {
+        List<ClassCount> lines = new ArrayList<>();
+        CollectionHelpers.countBy(readableTitles(records), Title.Parts::className)
+                .forEach((className, count) -> lines.add(new ClassCount(className, count)));
+        return CollectionHelpers.sortBy(
+                lines,
+                Comparator.comparingInt((ClassCount line) -> -line.count()).thenComparing(ClassCount::className));
+    }
+
+    /** The titles of the performances read apart, leaving out any that cannot be read. */
+    private static List<Title.Parts> readableTitles(Iterable<Performance> records) {
+        List<Title.Parts> parts = new ArrayList<>();
+        for (Performance rung : collect(records)) {
+            readTitle(rung.title()).ifPresent(parts::add);
+        }
+        return parts;
+    }
+
+    private static Optional<Title.Parts> readTitle(String title) {
+        try {
+            return Optional.of(Title.parse(title));
+        } catch (GarterholeException | IllegalArgumentException unreadable) {
+            return Optional.empty();
+        }
     }
 
     /**
