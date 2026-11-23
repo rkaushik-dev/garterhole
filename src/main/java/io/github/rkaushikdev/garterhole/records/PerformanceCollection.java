@@ -4,6 +4,7 @@ import io.github.rkaushikdev.garterhole.ConflictException;
 import io.github.rkaushikdev.garterhole.NotFoundException;
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.composition.Lengths;
+import io.github.rkaushikdev.garterhole.method.Title;
 import io.github.rkaushikdev.garterhole.util.CollectionHelpers;
 import io.github.rkaushikdev.garterhole.util.Json;
 import io.github.rkaushikdev.garterhole.util.Text;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
  * A tower's performance records, held together.
@@ -146,30 +148,7 @@ public final class PerformanceCollection implements Iterable<Performance> {
      * @return the matching performances, most recent first
      */
     public List<Performance> find(Query query) {
-        Optional<String> wantedTower =
-                query.tower().map(text -> Text.squash(text).toLowerCase(Locale.ROOT));
-        Optional<String> wantedTitle =
-                query.title().map(text -> Text.squash(text).toLowerCase(Locale.ROOT));
-        Optional<String> wantedRinger = query.ringer().map(Text::squash);
-        Optional<String> wantedConductor = query.conductor().map(Text::squash);
-        return all().stream()
-                .filter(rung -> wantedTower
-                        .map(tower -> rung.tower().toLowerCase(Locale.ROOT).contains(tower))
-                        .orElse(true))
-                .filter(rung -> wantedTitle
-                        .map(title -> rung.title().toLowerCase(Locale.ROOT).contains(title))
-                        .orElse(true))
-                .filter(rung -> wantedRinger
-                        .map(ringer -> rung.bellOf(ringer).isPresent())
-                        .orElse(true))
-                .filter(rung -> wantedConductor
-                        .map(conductor -> rung.conductor().equals(Optional.of(conductor)))
-                        .orElse(true))
-                .filter(rung -> query.kind().map(kind -> rung.kind() == kind).orElse(true))
-                .filter(rung ->
-                        query.from().map(from -> !rung.date().isBefore(from)).orElse(true))
-                .filter(rung -> query.to().map(to -> rung.date().isBefore(to)).orElse(true))
-                .toList();
+        return all().stream().filter(query::matches).toList();
     }
 
     /**
@@ -193,41 +172,28 @@ public final class PerformanceCollection implements Iterable<Performance> {
     }
 
     /**
-     * What to look for. Each part left out matches everything.
-     *
-     * @param tower part of the tower name
-     * @param title part of the method title
-     * @param ringer somebody who rang
-     * @param conductor who conducted
-     * @param kind what the length counts as
-     * @param from the first day to include
-     * @param to the first day to leave out
+     * What to look for: a list of narrowings, each of which a performance has
+     * to pass. A query with none matches everything. Each narrowing gives a new
+     * query and leaves the one it narrowed as it was.
      */
-    public record Query(
-            Optional<String> tower,
-            Optional<String> title,
-            Optional<String> ringer,
-            Optional<String> conductor,
-            Optional<Lengths.Kind> kind,
-            Optional<LocalDate> from,
-            Optional<LocalDate> to) {
+    public static final class Query {
 
         /** A query that matches everything. */
-        public static final Query ALL = new Query(
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty());
+        public static final Query ALL = new Query(List.of());
+
+        private final List<Predicate<Performance>> narrowings;
+
+        private Query(List<Predicate<Performance>> narrowings) {
+            this.narrowings = List.copyOf(narrowings);
+        }
 
         /**
          * @param name part of the tower name
          * @return this query, also matching on the tower
          */
         public Query tower(String name) {
-            return new Query(Optional.of(name), title, ringer, conductor, kind, from, to);
+            String wanted = lower(name);
+            return and(rung -> rung.tower().toLowerCase(Locale.ROOT).contains(wanted));
         }
 
         /**
@@ -235,7 +201,8 @@ public final class PerformanceCollection implements Iterable<Performance> {
          * @return this query, also matching on the method
          */
         public Query title(String method) {
-            return new Query(tower, Optional.of(method), ringer, conductor, kind, from, to);
+            String wanted = lower(method);
+            return and(rung -> rung.title().toLowerCase(Locale.ROOT).contains(wanted));
         }
 
         /**
@@ -243,7 +210,8 @@ public final class PerformanceCollection implements Iterable<Performance> {
          * @return this query, also matching on the band
          */
         public Query ringer(String name) {
-            return new Query(tower, title, Optional.of(name), conductor, kind, from, to);
+            String wanted = Text.squash(name);
+            return and(rung -> rung.bellOf(wanted).isPresent());
         }
 
         /**
@@ -251,7 +219,8 @@ public final class PerformanceCollection implements Iterable<Performance> {
          * @return this query, also matching on the conductor
          */
         public Query conductor(String name) {
-            return new Query(tower, title, ringer, Optional.of(name), kind, from, to);
+            Optional<String> wanted = Optional.of(Text.squash(name));
+            return and(rung -> rung.conductor().equals(wanted));
         }
 
         /**
@@ -259,7 +228,7 @@ public final class PerformanceCollection implements Iterable<Performance> {
          * @return this query, also matching on the kind of performance
          */
         public Query kind(Lengths.Kind length) {
-            return new Query(tower, title, ringer, conductor, Optional.of(length), from, to);
+            return and(rung -> rung.kind() == length);
         }
 
         /**
@@ -267,7 +236,7 @@ public final class PerformanceCollection implements Iterable<Performance> {
          * @return this query, also matching on the date
          */
         public Query from(LocalDate day) {
-            return new Query(tower, title, ringer, conductor, kind, Optional.of(day), to);
+            return and(rung -> !rung.date().isBefore(day));
         }
 
         /**
@@ -275,7 +244,59 @@ public final class PerformanceCollection implements Iterable<Performance> {
          * @return this query, also matching on the date
          */
         public Query to(LocalDate day) {
-            return new Query(tower, title, ringer, conductor, kind, from, Optional.of(day));
+            return and(rung -> rung.date().isBefore(day));
+        }
+
+        /**
+         * @param bells a stage, for example eight for Major
+         * @return this query, also matching on the stage the title gives
+         */
+        public Query stage(int bells) {
+            return and(
+                    rung -> parts(rung).filter(parts -> parts.stage() == bells).isPresent());
+        }
+
+        /**
+         * The question an annual peal analysis asks, such as how many Surprise
+         * quarters a tower had.
+         *
+         * @param wanted a class as a title gives it, for example {@code Surprise}
+         * @return this query, also matching on the class of method
+         */
+        public Query className(String wanted) {
+            return and(rung -> parts(rung)
+                    .filter(parts -> parts.className().equals(wanted))
+                    .isPresent());
+        }
+
+        /**
+         * @param inHand true for handbell performances only, false for tower ones only
+         * @return this query, also matching on where it was rung
+         */
+        public Query handbells(boolean inHand) {
+            return and(rung -> rung.handbells() == inHand);
+        }
+
+        /**
+         * @param rung a performance
+         * @return true when it passes every narrowing
+         */
+        public boolean matches(Performance rung) {
+            return narrowings.stream().allMatch(narrowing -> narrowing.test(rung));
+        }
+
+        private Query and(Predicate<Performance> narrowing) {
+            List<Predicate<Performance>> more = new ArrayList<>(narrowings);
+            more.add(narrowing);
+            return new Query(more);
+        }
+
+        private static String lower(String text) {
+            return Text.squash(text).toLowerCase(Locale.ROOT);
+        }
+
+        private static Optional<Title.Parts> parts(Performance rung) {
+            return Title.isWellFormed(rung.title()) ? Optional.of(Title.parse(rung.title())) : Optional.empty();
         }
     }
 }

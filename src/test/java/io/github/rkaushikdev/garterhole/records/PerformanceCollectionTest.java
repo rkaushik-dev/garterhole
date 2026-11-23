@@ -177,6 +177,44 @@ class PerformanceCollectionTest {
         }
 
         @Test
+        void filtersByClassAndStageForTheAnnualAnalysis() {
+            records.add(fields().date(LocalDate.of(2025, 8, 1))
+                    .title("Cambridge Surprise Major")
+                    .band("Alice", "Bob", "Carol", "Dan", "Erin", "Frank", "Gina", "Hal")
+                    .changes(1280)
+                    .build());
+            assertThat(records.find(Query.ALL.className("Surprise"))).hasSize(2);
+            assertThat(records.find(Query.ALL.className("Surprise").stage(8))).hasSize(1);
+            assertThat(records.find(Query.ALL.stage(6))).hasSize(3);
+            assertThat(records.find(Query.ALL.className("Delight"))).isEmpty();
+        }
+
+        @Test
+        void leavesOutARecordWhoseTitleCannotBeReadWhenAskedAboutItsStage() {
+            records.add(fields().date(LocalDate.of(2025, 8, 1)).title("Mystery").build());
+            assertThat(records.find(Query.ALL.stage(6))).hasSize(3);
+            assertThat(records.find(Query.ALL.title("mystery"))).hasSize(1);
+        }
+
+        @Test
+        void filtersByWhetherItWasRungInHand() {
+            records.add(fields().date(LocalDate.of(2025, 8, 1))
+                    .handbells(true)
+                    .band("Alice", "Bob", "Carol")
+                    .build());
+            assertThat(records.find(Query.ALL.handbells(true))).hasSize(1);
+            assertThat(records.find(Query.ALL.handbells(false))).hasSize(3);
+        }
+
+        @Test
+        void leavesTheQueryItNarrowedAsItWas() {
+            Query stMary = Query.ALL.tower("st mary");
+            stMary.kind(Lengths.Kind.PEAL);
+            assertThat(records.find(stMary)).hasSize(2);
+            assertThat(Query.ALL.matches(rung())).isTrue();
+        }
+
+        @Test
         void combinesFilters() {
             assertThat(records.find(Query.ALL.tower("St Mary").kind(Lengths.Kind.PEAL)))
                     .hasSize(1);
