@@ -68,10 +68,7 @@ public final class TowerCommands {
             bells.addObject().put("number", index + 1).put("weight", weights.get(index));
         }
         Tower tower = TowerRoutes.towerFrom(document);
-        ObjectNode stored = document.deepCopy();
-        stored.put("id", tower.id());
-        stored.put("size", tower.size());
-        tower.stages().forEach(stored.putArray("stages")::add);
+        ObjectNode stored = TowerRoutes.filingDocument(document, tower);
         context.service().putTower(tower.id(), stored);
         context.output().note("filed as " + tower.id());
         context.output().answer(stored, value -> describeTower(tower));
@@ -124,7 +121,8 @@ public final class TowerCommands {
         lines.add(tower.describe());
         lines.add("");
         for (Bell bell : tower.bells()) {
-            lines.add("  " + bell.number() + "  " + bell.weightText());
+            lines.add("  " + bell.number() + "  " + bell.weightText()
+                    + bell.note().map(note -> "  " + note).orElse(""));
         }
         return lines;
     }

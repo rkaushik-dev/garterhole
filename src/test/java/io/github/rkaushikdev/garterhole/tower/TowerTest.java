@@ -187,5 +187,39 @@ class TowerTest {
         void describesWhatItRings() {
             assertThat(stMary().describe()).contains("ringing up to Major");
         }
+
+        @Test
+        void putsTheKeyInTheDescriptionWhenTheTenorHasANote() {
+            Tower tower = new Tower(
+                    "St Mary",
+                    List.of(
+                            Bell.weighing(1, "4-0-0", Bell.Details.NONE.withNote("F")),
+                            Bell.weighing(2, "5-0-0", Bell.Details.NONE.withNote("Eb")),
+                            Bell.weighing(3, "6-0-0", Bell.Details.NONE.withNote("D")),
+                            Bell.weighing(4, "8-0-0", Bell.Details.NONE.withNote("C")),
+                            Bell.weighing(5, "10-0-0", Bell.Details.NONE.withNote("Bb"))));
+            assertThat(tower.describe()).isEqualTo("St Mary: 5 bells, tenor 10-0-0 in Bb, ringing up to Doubles");
+        }
+
+        @Test
+        void warnsWhenSomeBellsAreOffTheScale() {
+            Tower tower = new Tower(
+                    "St Mary",
+                    List.of(
+                            Bell.weighing(1, "4-0-0", Bell.Details.NONE.withNote("F")),
+                            Bell.weighing(2, "5-0-0", Bell.Details.NONE.withNote("Eb")),
+                            Bell.weighing(3, "6-0-0", Bell.Details.NONE.withNote("C"))));
+            assertThat(tower.describe())
+                    .isEqualTo("St Mary: 3 bells, tenor 6-0-0 in C, ringing up to Singles," + " 2 bells off the scale");
+        }
+
+        @Test
+        void coversAnOddStageOnlyWithABellToSpare() {
+            assertThat(stMary().canCover(7)).isTrue();
+            assertThat(stMary().canCover(6)).isFalse();
+            assertThat(new Tower("Five", ring(5)).canCover(5)).isFalse();
+            assertThat(new Tower("None", ring(2)).largestStage()).isZero();
+            assertThat(new Tower("None", ring(2)).describe()).endsWith(", too few bells to ring changes on");
+        }
     }
 }

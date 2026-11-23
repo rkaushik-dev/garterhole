@@ -7,6 +7,7 @@ import static io.github.rkaushikdev.garterhole.cli.commands.TowerCommands.showTo
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.rkaushikdev.garterhole.NotFoundException;
 import io.github.rkaushikdev.garterhole.Service;
 import io.github.rkaushikdev.garterhole.ValidationException;
@@ -14,6 +15,7 @@ import io.github.rkaushikdev.garterhole.cli.Args;
 import io.github.rkaushikdev.garterhole.cli.CommandContext;
 import io.github.rkaushikdev.garterhole.cli.Output;
 import io.github.rkaushikdev.garterhole.cli.ParsedArgs;
+import io.github.rkaushikdev.garterhole.http.routes.TowerRoutes;
 import io.github.rkaushikdev.garterhole.store.Journal;
 import io.github.rkaushikdev.garterhole.store.Repository;
 import io.github.rkaushikdev.garterhole.util.Json;
@@ -158,6 +160,22 @@ class TowerCommandsTest {
             Output.Collected collected = Output.collecting();
             showTower(args("show --id bridgend-stmary"), context(collected));
             assertThat(collected.out().get(0)).contains("StMary, Bridgend");
+        }
+
+        @Test
+        void printsTheNoteBesideEachBellThatHasOne() {
+            JsonNode sent = Json.parse("{\"name\":\"Tuned\",\"bells\":[{\"number\":1,\"weight\":\"4-0-0\"},"
+                    + "{\"number\":2,\"weight\":\"5-0-0\",\"note\":\"Eb\"}]}");
+            service.putTower("tuned", TowerRoutes.filingDocument(sent, TowerRoutes.towerFrom(sent)));
+            Output.Collected collected = Output.collecting();
+            showTower(args("show --id tuned"), context(collected));
+            assertThat(collected.out().get(0)).contains("tenor 5-0-0 in Eb");
+            assertThat(collected.out()).contains("  1  4-0-0", "  2  5-0-0  Eb");
+        }
+
+        @Test
+        void filesNoKeyForATowerWhoseTenorHasNoNote() {
+            assertThat(service.getTower("bridgend-stmary").get("key").isNull()).isTrue();
         }
 
         @Test

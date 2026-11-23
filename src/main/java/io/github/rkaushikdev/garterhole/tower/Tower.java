@@ -173,7 +173,7 @@ public final class Tower {
      * @return true when there is a bell spare to cover with
      */
     public boolean canCover(int stage) {
-        return canRing(stage) && stage % 2 == 1 && size() >= stage + 1;
+        return canRing(stage) && Stage.hasCover(stage) && size() >= Stage.bellsInTower(stage);
     }
 
     /**
@@ -194,8 +194,7 @@ public final class Tower {
      * @return the largest stage this tower can ring, or nought when it can ring none
      */
     public int largestStage() {
-        List<Integer> stages = stages();
-        return stages.isEmpty() ? 0 : stages.get(0);
+        return stages().stream().findFirst().orElse(0);
     }
 
     /**
@@ -212,9 +211,26 @@ public final class Tower {
     }
 
     /**
-     * @return how the tower would describe itself in a directory
+     * How the tower would describe itself in a directory: the key of the ring
+     * when the tenor's note is known, and a warning when some bells are off the
+     * scale, because that is the first thing a visiting band asks about. A
+     * tower of one or two bells says so rather than naming a stage it cannot ring.
+     *
+     * @return the description
      */
     public String describe() {
-        return this + ", ringing up to " + Stage.name(largestStage());
+        StringBuilder text = new StringBuilder(toString());
+        Tuning.keyOf(this)
+                .ifPresent(key -> text.append(" in ").append(tenor().note().orElse(key.sharpName())));
+        if (largestStage() == 0) {
+            text.append(", too few bells to ring changes on");
+        } else {
+            text.append(", ringing up to ").append(Stage.name(largestStage()));
+        }
+        List<Tuning.Discord> discords = Tuning.discords(this);
+        if (!discords.isEmpty()) {
+            text.append(", ").append(Text.plural(discords.size(), "bell")).append(" off the scale");
+        }
+        return text.toString();
     }
 }

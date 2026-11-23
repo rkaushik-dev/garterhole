@@ -14,6 +14,7 @@ import io.github.rkaushikdev.garterhole.http.Router;
 import io.github.rkaushikdev.garterhole.http.Server;
 import io.github.rkaushikdev.garterhole.store.Journal;
 import io.github.rkaushikdev.garterhole.store.Repository;
+import io.github.rkaushikdev.garterhole.util.Json;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -66,6 +67,7 @@ class TowerRoutesTest {
             Response response = ask("POST", "/towers", object(ST_MARY));
             assertThat(response.body().path("size").asInt()).isEqualTo(6);
             assertThat(response.body().path("stages")).isEqualTo(Documents.doc("[6,5,4,3]"));
+            assertThat(response.body().path("key").asText()).isEqualTo("F");
         }
 
         @Test
@@ -141,6 +143,27 @@ class TowerRoutesTest {
             assertThat(response.body().path("tenor").asText()).isEqualTo("12-1-4");
             assertThat(response.body().path("bells").path(0).path("weight").asText())
                     .isEqualTo("4-0-0");
+        }
+
+        @Test
+        void givesTheKeyFromTheTenor() {
+            Response response = ask("GET", "/towers/bridgend-st-mary-the-virgin/bells");
+            assertThat(response.body().path("key").asText()).isEqualTo("F");
+            assertThat(response.body().path("offTheScale")).isEmpty();
+        }
+
+        @Test
+        void namesTheBellsOffTheScale() {
+            ask(
+                    "POST",
+                    "/towers",
+                    object("{'name':'Out','bells':[{'number':1,'weight':'4-0-0','note':'D'},"
+                            + "{'number':2,'weight':'5-0-0','note':'B'},{'number':3,'weight':'6-0-0','note':'Bb'},"
+                            + "{'number':4,'weight':'7-0-0','note':'A'},{'number':5,'weight':'8-0-0','note':'G'},"
+                            + "{'number':6,'weight':'9-0-0','note':'F'}]}"));
+            Response response = ask("GET", "/towers/out/bells");
+            assertThat(response.body().path("offTheScale"))
+                    .isEqualTo(Json.parse("[{\"bell\": 2, \"note\": \"B\", \"expected\": \"C\"}]"));
         }
 
         @Test

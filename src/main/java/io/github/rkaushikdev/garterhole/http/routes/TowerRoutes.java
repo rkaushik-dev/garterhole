@@ -9,7 +9,9 @@ import io.github.rkaushikdev.garterhole.http.Pagination;
 import io.github.rkaushikdev.garterhole.http.Response;
 import io.github.rkaushikdev.garterhole.http.Router;
 import io.github.rkaushikdev.garterhole.tower.Bell;
+import io.github.rkaushikdev.garterhole.tower.Note;
 import io.github.rkaushikdev.garterhole.tower.Tower;
+import io.github.rkaushikdev.garterhole.tower.Tuning;
 import io.github.rkaushikdev.garterhole.util.Json;
 import io.github.rkaushikdev.garterhole.util.Text;
 import io.github.rkaushikdev.garterhole.validation.Schema;
@@ -81,11 +83,7 @@ public final class TowerRoutes {
         router.post("/towers", (request, context) -> {
             JsonNode body = Schemas.check(NEW_TOWER, request.body(), "the tower");
             Tower tower = towerFrom(body);
-            ObjectNode document = ((ObjectNode) body).deepCopy();
-            document.put("id", tower.id());
-            document.put("size", tower.size());
-            ArrayNode stages = document.putArray("stages");
-            tower.stages().forEach(stages::add);
+            ObjectNode document = filingDocument(body, tower);
             context.service().putTower(tower.id(), document);
             return Response.created("/towers/" + tower.id(), document);
         });
@@ -108,6 +106,14 @@ public final class TowerRoutes {
             answer.set("bells", bells);
             answer.put("tenor", tower.tenor().weightText());
             Json.putNumber(answer, "totalWeightPounds", tower.totalWeightPounds());
+            answer.put("key", Tuning.keyOf(tower).map(Note::sharpName).orElse(null));
+            ArrayNode discords = answer.putArray("offTheScale");
+            for (Tuning.Discord discord : Tuning.discords(tower)) {
+                discords.addObject()
+                        .put("bell", discord.bell())
+                        .put("note", discord.found().sharpName())
+                        .put("expected", discord.expected().sharpName());
+            }
             return Response.json(answer);
         });
 
@@ -142,6 +148,25 @@ public final class TowerRoutes {
                     "the tower says its id is " + Json.stringify(id) + " but its name gives " + Json.quote(tower.id()));
         }
         return tower;
+    }
+
+    /**
+     * The document a tower is filed as: what was sent, with what the class
+     * works out from it laid over the top, so that a list of towers can be
+     * printed without building every one of them again.
+     *
+     * @param sent the tower as it was sent
+     * @param tower the tower built from it
+     * @return a copy of what was sent, with {@code id}, {@code size}, {@code stages}
+     *     and {@code key} added, the key {@code null} when the tenor has no note
+     */
+    public static ObjectNode filingDocument(JsonNode sent, Tower tower) {
+        ObjectNode document = ((ObjectNode) sent).deepCopy();
+        document.put("id", tower.id());
+        document.put("size", tower.size());
+        tower.stages().forEach(document.putArray("stages")::add);
+        document.put("key", Tuning.keyOf(tower).map(Note::sharpName).orElse(null));
+        return document;
     }
 
     /**
