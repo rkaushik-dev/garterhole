@@ -6,8 +6,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.rkaushikdev.garterhole.composition.Prover.Proof;
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.MusicSummary;
 import io.github.rkaushikdev.garterhole.util.Json;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
+import java.util.function.Function;
 
 /**
  * The report on a touch: how long it is, whether it is true, what it is worth
@@ -25,6 +29,7 @@ import java.util.Optional;
  * @param music the music in the rows rung, the closing rounds left out
  * @param tenors whether the tenors stayed coursing each other, when the lead
  *     heads have the treble leading so that a coursing order can be read
+ * @param work whether every working bell rang every lead of the method, when it has a hunt bell
  */
 public record TouchAnalysis(
         String title,
@@ -36,7 +41,8 @@ public record TouchAnalysis(
         List<CallCount> calls,
         Optional<PartsFound> parts,
         MusicSummary music,
-        Optional<TenorsFound> tenors) {
+        Optional<TenorsFound> tenors,
+        Optional<WorkFound> work) {
 
     /**
      * How many times a call is made.
@@ -75,6 +81,26 @@ public record TouchAnalysis(
     }
 
     /**
+     * Whether a touch has all the work: every working bell has rung every lead
+     * of the method, which is to say started a lead from every working place.
+     *
+     * @param allTheWork true when no bell missed anything
+     * @param missing for each bell that missed something, the places it never started a lead from
+     */
+    public record WorkFound(boolean allTheWork, Map<Integer, List<Integer>> missing) {
+
+        /**
+         * @param allTheWork true when no bell missed anything
+         * @param missing the places each bell never started a lead from
+         */
+        public WorkFound {
+            Map<Integer, List<Integer>> frozen = new TreeMap<>();
+            missing.forEach((bell, places) -> frozen.put(bell, List.copyOf(places)));
+            missing = Collections.unmodifiableMap(frozen);
+        }
+    }
+
+    /**
      * @return the calls as a document list, each with its symbol and count
      */
     public ArrayNode callsJson() {
@@ -89,27 +115,38 @@ public record TouchAnalysis(
      * @return the parts as a document, or a JSON null when the calling has no part structure
      */
     public JsonNode partsJson() {
-        if (parts.isEmpty()) {
-            return Json.mapper().nullNode();
-        }
-        PartsFound found = parts.get();
-        return Json.object()
+        return orNull(parts, found -> Json.object()
                 .put("parts", found.parts())
                 .put("leadsPerPart", found.leadsPerPart())
-                .put("partEnd", found.partEnd());
+                .put("partEnd", found.partEnd()));
     }
 
     /**
      * @return the tenors as a document, or a JSON null when no coursing order could be read
      */
     public JsonNode tenorsJson() {
-        if (tenors.isEmpty()) {
-            return Json.mapper().nullNode();
-        }
-        TenorsFound found = tenors.get();
-        ObjectNode json = Json.object().put("tenors", found.tenors()).put("together", found.together());
-        found.partedAt().forEach(json.putArray("partedAt")::add);
-        return json;
+        return orNull(tenors, found -> {
+            ObjectNode json = Json.object().put("tenors", found.tenors()).put("together", found.together());
+            found.partedAt().forEach(json.putArray("partedAt")::add);
+            return json;
+        });
+    }
+
+    /**
+     * @return the work as a document, the missing places keyed by bell, or a
+     *     JSON null for a method with no hunt bell
+     */
+    public JsonNode workJson() {
+        return orNull(work, found -> {
+            ObjectNode json = Json.object().put("allTheWork", found.allTheWork());
+            ObjectNode missing = json.putObject("missing");
+            found.missing().forEach((bell, places) -> places.forEach(missing.putArray(String.valueOf(bell))::add));
+            return json;
+        });
+    }
+
+    private static <T> JsonNode orNull(Optional<T> found, Function<T, JsonNode> write) {
+        return found.map(write).orElseGet(() -> Json.mapper().nullNode());
     }
 
     /**
@@ -127,6 +164,7 @@ public record TouchAnalysis(
         json.set("parts", partsJson());
         json.set("music", music.toJson());
         json.set("tenors", tenorsJson());
+        json.set("work", workJson());
         return json;
     }
 }

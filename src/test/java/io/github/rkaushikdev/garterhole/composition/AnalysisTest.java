@@ -12,6 +12,7 @@ import io.github.rkaushikdev.garterhole.composition.Analysis.Claim;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.CallCount;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.PartsFound;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.TenorsFound;
+import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.WorkFound;
 import io.github.rkaushikdev.garterhole.core.RowParse;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.util.Json;
@@ -168,6 +169,33 @@ class AnalysisTest {
     }
 
     @Nested
+    class AllTheWork {
+
+        @Test
+        void findsItInAPlainCourseAndInThreeHomes() {
+            assertThat(analyseTouch(plainBobMajor(), ".......").work())
+                    .contains(new WorkFound(true, java.util.Map.of()));
+            assertThat(analyseTouch(plainBobMajor(), "3(H)").work())
+                    .hasValueSatisfying(found -> assertThat(found.allTheWork()).isTrue());
+        }
+
+        @Test
+        void namesThePlacesEachBellNeverStartedALeadFrom() {
+            WorkFound found = analyseTouch(plainBobMajor(), "-......").work().orElseThrow();
+            assertThat(found.allTheWork()).isFalse();
+            assertThat(found.missing()).containsOnlyKeys(2, 3, 5).containsEntry(2, List.of(3));
+            assertThat(reportLines(analyseTouch(plainBobMajor(), "-......")))
+                    .contains("not all the work: 3 bells short of it");
+        }
+
+        @Test
+        void hasNothingToSayAboutAPrinciple() {
+            Method stedman = Method.of("Stedman", 7, "3.1.7.3.1.3,1");
+            assertThat(analyseTouch(stedman, "....").work()).isEmpty();
+        }
+    }
+
+    @Nested
     class ReportLines {
 
         @Test
@@ -179,6 +207,7 @@ class AnalysisTest {
             assertThat(lines).contains("3 parts of 7 leads, part end 14235678");
             assertThat(lines).contains("calls: 3-");
             assertThat(lines).contains("tenors together throughout");
+            assertThat(lines).contains("all the work");
         }
 
         @Test

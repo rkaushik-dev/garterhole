@@ -45,7 +45,8 @@ class TouchAnalysisTest {
                         "calls",
                         "parts",
                         "music",
-                        "tenors");
+                        "tenors",
+                        "work");
         assertThat(json.get("kind").asText()).isEqualTo("touch");
         assertThat(json.get("calls")).isEqualTo(Json.parse("[{\"symbol\":\"-\",\"count\":3}]"));
         assertThat(fieldNames(json.get("music"))).containsExactly("score", "runs", "named");
@@ -75,6 +76,17 @@ class TouchAnalysisTest {
         assertThat(together).isEqualTo(Json.parse("{\"tenors\":2,\"together\":true,\"partedAt\":[]}"));
         JsonNode parted = Analysis.analyseTouch(plainBobMajor(), "..-").toJson().get("tenors");
         assertThat(parted.get("partedAt")).isEqualTo(Json.parse("[3]"));
+    }
+
+    @Test
+    void writesTheWorkWithTheMissingPlacesKeyedByBell() {
+        assertThat(Analysis.analyseTouch(plainBobMajor(), "3(H)").toJson().get("work"))
+                .isEqualTo(Json.parse("{\"allTheWork\":true,\"missing\":{}}"));
+        assertThat(Analysis.analyseTouch(plainBobMajor(), "-......").toJson().get("work"))
+                .isEqualTo(Json.parse("{\"allTheWork\":false,\"missing\":{\"2\":[3],\"3\":[5],\"5\":[2]}}"));
+        Method stedman = Method.of("Stedman", 7, "3.1.7.3.1.3,1");
+        assertThat(Analysis.analyseTouch(stedman, "....").toJson().get("work").isNull())
+                .isTrue();
     }
 
     @Test

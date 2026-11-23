@@ -6,6 +6,7 @@ import io.github.rkaushikdev.garterhole.composition.Prover.Proof;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.CallCount;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.PartsFound;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.TenorsFound;
+import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.WorkFound;
 import io.github.rkaushikdev.garterhole.composition.TouchExpander.Rung;
 import io.github.rkaushikdev.garterhole.composition.TouchExpander.RungLead;
 import io.github.rkaushikdev.garterhole.composition.music.MusicRule;
@@ -14,6 +15,7 @@ import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.MusicSumma
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.RunLine;
 import io.github.rkaushikdev.garterhole.core.CoursingOrder;
 import io.github.rkaushikdev.garterhole.core.Row;
+import io.github.rkaushikdev.garterhole.method.HuntBells;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.method.Title;
 import io.github.rkaushikdev.garterhole.util.CollectionHelpers;
@@ -23,10 +25,13 @@ import io.github.rkaushikdev.garterhole.util.Text;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -195,7 +200,39 @@ public final class Analysis {
                 detected.map(found -> new PartsFound(
                         found.parts(), found.leadsPerPart(), found.partEnd().toString())),
                 music,
-                tenorsFound(rung.leads().stream().map(RungLead::leadHead).toList(), method.stage()));
+                tenorsFound(rung.leads().stream().map(RungLead::leadHead).toList(), method.stage()),
+                workFound(method, rung));
+    }
+
+    /**
+     * Whether every working bell started a lead from every working place,
+     * which is what a composer means by all the work. A bell that starts a
+     * lead in a place rings that place's piece of work, so a touch that misses
+     * a place for some bell leaves that bell short of the method.
+     *
+     * @param method the method, which needs a hunt bell for the leads to have pieces of work
+     * @param rung the touch, rung
+     * @return what was found, or nothing for a principle
+     */
+    public static Optional<WorkFound> workFound(Method method, Rung rung) {
+        if (HuntBells.isPrinciple(method)) {
+            return Optional.empty();
+        }
+        List<Integer> working = HuntBells.workingBells(method);
+        List<Row> starts = new ArrayList<>();
+        starts.add(rung.block().first());
+        rung.leads().subList(0, Math.max(0, rung.leads().size() - 1)).forEach(lead -> starts.add(lead.leadHead()));
+        Map<Integer, List<Integer>> missing = new LinkedHashMap<>();
+        for (int bell : working) {
+            Set<Integer> started = new HashSet<>();
+            starts.forEach(start -> started.add(start.placeOf(bell)));
+            List<Integer> shortOf =
+                    working.stream().filter(place -> !started.contains(place)).toList();
+            if (!shortOf.isEmpty()) {
+                missing.put(bell, shortOf);
+            }
+        }
+        return Optional.of(new WorkFound(missing.isEmpty(), missing));
     }
 
     /**
@@ -298,6 +335,12 @@ public final class Analysis {
                 .map(entry -> entry.count() + entry.symbol())
                 .collect(Collectors.joining(" "));
         lines.add(calls.isEmpty() ? "no calls" : "calls: " + calls);
+        analysis.work()
+                .ifPresent(found -> lines.add(
+                        found.allTheWork()
+                                ? "all the work"
+                                : "not all the work: "
+                                        + Text.plural(found.missing().size(), "bell") + " short of it"));
         analysis.tenors()
                 .ifPresent(found -> lines.add(
                         found.together()
