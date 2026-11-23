@@ -30,6 +30,51 @@ class TouchSearchTest {
     }
 
     @Nested
+    class KeepingTheTenorsTogether {
+
+        private List<FoundTouch> together(Method method, int maxLeads, int limit) {
+            return searchTouches(
+                    Request.of(method).withMaxLeads(maxLeads).withLimit(limit).keepingTenorsTogether());
+        }
+
+        @Test
+        void findsOnlyTouchesWhoseEveryLeadHeadHasTheTenorsCoursing() {
+            Method bob = plainBobMajor();
+            List<FoundTouch> found = together(bob, 14, 10);
+            assertThat(found).isNotEmpty();
+            for (FoundTouch touch : found) {
+                TouchAnalysis analysis = Analysis.analyseTouch(bob, touch.calling());
+                assertThat(analysis.tenors()).hasValueSatisfying(tenors -> assertThat(tenors.together())
+                        .isTrue());
+                assertThat(analysis.proof().isTrue()).isTrue();
+            }
+        }
+
+        @Test
+        void findsTouchesAnUnrestrictedSearchAlsoFindsButFewerOfThem() {
+            List<FoundTouch> any = search(plainBobMinor(), 10, 200);
+            List<FoundTouch> together = together(plainBobMinor(), 10, 200);
+            assertThat(any).containsAll(together);
+            assertThat(together.size()).isLessThan(any.size());
+        }
+
+        @Test
+        void startsFromTheDefaultsWithTheTenorsAllowedToPart() {
+            assertThat(Request.of(plainBobMinor()).tenorsTogether()).isFalse();
+            assertThat(Request.of(plainBobMinor()).keepingTenorsTogether().tenorsTogether())
+                    .isTrue();
+        }
+
+        @Test
+        void refusesAMethodWithoutTheTrebleHunting() {
+            Method stedman = Method.of("Stedman", 7, "3.1.7.3.1.3,1");
+            assertThatThrownBy(() -> together(stedman, 4, 1)).hasMessageContaining("treble dominated");
+            assertThatThrownBy(() -> together(Method.of("Plain", 5, "5.1.5.1.5,125"), 4, 1))
+                    .hasMessageContaining("on six or more");
+        }
+    }
+
+    @Nested
     class SearchTouches {
 
         @Test
