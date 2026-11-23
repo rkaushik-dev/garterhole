@@ -11,6 +11,8 @@ import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.composition.Analysis.Claim;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.CallCount;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.PartsFound;
+import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.TenorsFound;
+import io.github.rkaushikdev.garterhole.core.RowParse;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.util.Json;
 import java.util.List;
@@ -135,6 +137,37 @@ class AnalysisTest {
     }
 
     @Nested
+    class TenorsTogether {
+
+        @Test
+        void watchesTheBackTwoUpToMajorAndTheBellsAboveTheSixthBeyond() {
+            assertThat(Analysis.tenorCount(6)).isEqualTo(2);
+            assertThat(Analysis.tenorCount(8)).isEqualTo(2);
+            assertThat(Analysis.tenorCount(10)).isEqualTo(4);
+            assertThat(Analysis.tenorCount(12)).isEqualTo(6);
+        }
+
+        @Test
+        void findsThemTogetherThroughABobCourse() {
+            assertThat(analyseTouch(plainBobMajor(), "3(H)").tenors()).contains(new TenorsFound(2, true, List.of()));
+        }
+
+        @Test
+        void namesTheLeadWhoseLeadHeadPartedThem() {
+            assertThat(analyseTouch(plainBobMajor(), "..-").tenors()).contains(new TenorsFound(2, false, List.of(3)));
+            assertThat(reportLines(analyseTouch(plainBobMajor(), "..-"))).contains("tenors parted at 1 lead head");
+        }
+
+        @Test
+        void readsNothingWhenATrebleIsNotLeadingOrTheStageIsSmall() {
+            assertThat(Analysis.tenorsFound(List.of(RowParse.parseRow("21345678")), 8))
+                    .isEmpty();
+            assertThat(Analysis.tenorsFound(List.of(RowParse.parseRow("13524")), 5))
+                    .isEmpty();
+        }
+    }
+
+    @Nested
     class ReportLines {
 
         @Test
@@ -145,6 +178,7 @@ class AnalysisTest {
             assertThat(lines.get(2)).isEqualTo("true, 336 rows");
             assertThat(lines).contains("3 parts of 7 leads, part end 14235678");
             assertThat(lines).contains("calls: 3-");
+            assertThat(lines).contains("tenors together throughout");
         }
 
         @Test

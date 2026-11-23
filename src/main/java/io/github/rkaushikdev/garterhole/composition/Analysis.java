@@ -5,17 +5,20 @@ import io.github.rkaushikdev.garterhole.composition.PartStructure.Parts;
 import io.github.rkaushikdev.garterhole.composition.Prover.Proof;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.CallCount;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.PartsFound;
+import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.TenorsFound;
 import io.github.rkaushikdev.garterhole.composition.TouchExpander.Rung;
 import io.github.rkaushikdev.garterhole.composition.TouchExpander.RungLead;
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer;
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.MusicSummary;
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.RunLine;
+import io.github.rkaushikdev.garterhole.core.CoursingOrder;
 import io.github.rkaushikdev.garterhole.core.Row;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.method.Title;
 import io.github.rkaushikdev.garterhole.util.CollectionHelpers;
 import io.github.rkaushikdev.garterhole.util.Json;
 import io.github.rkaushikdev.garterhole.util.LocaleOrder;
+import io.github.rkaushikdev.garterhole.util.Text;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -167,7 +170,43 @@ public final class Analysis {
                 callCounts(rung.leads().stream().map(RungLead::symbol).toList()),
                 detected.map(found -> new PartsFound(
                         found.parts(), found.leadsPerPart(), found.partEnd().toString())),
-                music);
+                music,
+                tenorsFound(rung.leads().stream().map(RungLead::leadHead).toList(), method.stage()));
+    }
+
+    /**
+     * How many of the back bells count as the tenors: the back two up to
+     * Major, and everything above the sixth on ten and twelve, which is what a
+     * band ringing Royal means by keeping the tenors together.
+     *
+     * @param stage a stage of six or more
+     * @return how many tenors to watch
+     */
+    public static int tenorCount(int stage) {
+        return stage <= 8 ? 2 : stage - 6;
+    }
+
+    /**
+     * Whether the tenors stayed coursing each other at every lead head. It can
+     * only be read when every lead head has the treble leading, which is true
+     * of a treble dominated method and not of a principle.
+     *
+     * @param leadHeads the lead head of every lead rung, in order
+     * @param stage the stage
+     * @return what was found, or nothing below six bells or when a lead head has the treble elsewhere
+     */
+    public static Optional<TenorsFound> tenorsFound(List<Row> leadHeads, int stage) {
+        if (stage < 6 || leadHeads.stream().anyMatch(head -> head.bellAt(1) != 1)) {
+            return Optional.empty();
+        }
+        int tenors = tenorCount(stage);
+        List<Integer> parted = new ArrayList<>();
+        for (int index = 0; index < leadHeads.size(); index += 1) {
+            if (!CoursingOrder.of(leadHeads.get(index)).tenorsTogether(tenors)) {
+                parted.add(index + 1);
+            }
+        }
+        return Optional.of(new TenorsFound(tenors, parted.isEmpty(), parted));
     }
 
     /**
@@ -235,6 +274,12 @@ public final class Analysis {
                 .map(entry -> entry.count() + entry.symbol())
                 .collect(Collectors.joining(" "));
         lines.add(calls.isEmpty() ? "no calls" : "calls: " + calls);
+        analysis.tenors()
+                .ifPresent(found -> lines.add(
+                        found.together()
+                                ? "tenors together throughout"
+                                : "tenors parted at "
+                                        + Text.plural(found.partedAt().size(), "lead head")));
         lines.add("music score " + Json.number(analysis.music().score()));
         for (RunLine run : analysis.music().runs()) {
             if (run.total() > 0) {

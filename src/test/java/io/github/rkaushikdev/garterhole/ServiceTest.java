@@ -123,6 +123,8 @@ class ServiceTest {
             assertThat(analysis.get("length").asInt()).isEqualTo(336);
             assertThat(analysis.get("true").asBoolean()).isTrue();
             assertThat(analysis.get("comesRound").asBoolean()).isTrue();
+            assertThat(analysis.has("proof")).isFalse();
+            assertThat(analysis.get("tenors").get("together").asBoolean()).isTrue();
         }
 
         @Test

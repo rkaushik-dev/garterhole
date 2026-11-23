@@ -32,7 +32,16 @@ class TouchAnalysisTest {
         ObjectNode json = Analysis.analyseTouch(plainBobMajor(), "3(H)").toJson();
         assertThat(fieldNames(json))
                 .containsExactly(
-                        "title", "length", "kind", "comesRound", "proof", "summary", "calls", "parts", "music");
+                        "title",
+                        "length",
+                        "kind",
+                        "comesRound",
+                        "proof",
+                        "summary",
+                        "calls",
+                        "parts",
+                        "music",
+                        "tenors");
         assertThat(json.get("kind").asText()).isEqualTo("touch");
         assertThat(json.get("calls")).isEqualTo(Json.parse("[{\"symbol\":\"-\",\"count\":3}]"));
         assertThat(fieldNames(json.get("music"))).containsExactly("score", "runs", "named");
@@ -53,6 +62,15 @@ class TouchAnalysisTest {
         TouchAnalysis analysis = Analysis.analyseTouch(plainBobMajor(), "-...");
         assertThat(analysis.parts()).isEmpty();
         assertThat(analysis.toJson().get("parts").isNull()).isTrue();
+    }
+
+    @Test
+    void writesTheTenorsWithTheLeadsThatPartedThem() {
+        JsonNode together =
+                Analysis.analyseTouch(plainBobMajor(), "3(H)").toJson().get("tenors");
+        assertThat(together).isEqualTo(Json.parse("{\"tenors\":2,\"together\":true,\"partedAt\":[]}"));
+        JsonNode parted = Analysis.analyseTouch(plainBobMajor(), "..-").toJson().get("tenors");
+        assertThat(parted.get("partedAt")).isEqualTo(Json.parse("[3]"));
     }
 
     @Test

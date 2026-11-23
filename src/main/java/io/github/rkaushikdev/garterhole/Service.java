@@ -138,22 +138,22 @@ public final class Service {
      * @param title the method's title
      * @param touch the touch, written either way
      * @return the report: title, length, kind, whether it comes round and is
-     *     true, the proof summary, the calls, the parts and the music
+     *     true, the proof summary, the calls, the parts, the music and whether
+     *     the tenors stayed together; the analysis document with the proof
+     *     cut down to whether it is true
      * @throws NotFoundException when the library does not hold the method
      */
     public ObjectNode analyse(String title, String touch) {
         Method method = MethodSerialiser.methodFromJson(getMethod(title));
         TouchAnalysis analysis = Analysis.analyseTouch(method, touch);
         ObjectNode report = Json.object();
-        report.put("title", analysis.title());
-        report.put("length", analysis.length());
-        report.put("kind", analysis.kind().label());
-        report.put("comesRound", analysis.comesRound());
-        report.put("true", analysis.proof().isTrue());
-        report.put("summary", analysis.summary());
-        report.set("calls", analysis.callsJson());
-        report.set("parts", analysis.partsJson());
-        report.set("music", analysis.music().toJson());
+        analysis.toJson().properties().forEach(field -> {
+            if (field.getKey().equals("proof")) {
+                report.put("true", analysis.proof().isTrue());
+            } else {
+                report.set(field.getKey(), field.getValue());
+            }
+        });
         return report;
     }
 
