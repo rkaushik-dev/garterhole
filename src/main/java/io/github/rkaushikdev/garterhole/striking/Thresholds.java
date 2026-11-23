@@ -15,8 +15,12 @@ import io.github.rkaushikdev.garterhole.util.Json;
  * @param gap how many milliseconds late a blow must be to be a gap
  * @param drift how many milliseconds out, either way, a blow must be to count towards a drift
  * @param driftRun how many such blows in a row make a drift
+ * @param clash how close behind the blow in front a blow must come to be a clash
  */
-public record Thresholds(double clip, double gap, double drift, double driftRun) {
+public record Thresholds(double clip, double gap, double drift, double driftRun, double clash) {
+
+    /** How close two blows have to be to clash, when nobody says. */
+    public static final double DEFAULT_CLASH = 30;
 
     /** The thresholds used when nobody gives any. */
     public static final Thresholds DEFAULT = new Thresholds(50, 50, 30, 4);
@@ -29,6 +33,19 @@ public record Thresholds(double clip, double gap, double drift, double driftRun)
         requirePositive("gap", gap);
         requirePositive("drift", drift);
         requirePositive("driftRun", driftRun);
+        requirePositive("clash", clash);
+    }
+
+    /**
+     * Thresholds with the usual clash margin.
+     *
+     * @param clip how many milliseconds early a blow must be to be a clip
+     * @param gap how many milliseconds late a blow must be to be a gap
+     * @param drift how many milliseconds out a blow must be to count towards a drift
+     * @param driftRun how many such blows in a row make a drift
+     */
+    public Thresholds(double clip, double gap, double drift, double driftRun) {
+        this(clip, gap, drift, driftRun, DEFAULT_CLASH);
     }
 
     /**
@@ -36,7 +53,7 @@ public record Thresholds(double clip, double gap, double drift, double driftRun)
      * @return these thresholds with the clip threshold replaced
      */
     public Thresholds withClip(double milliseconds) {
-        return new Thresholds(milliseconds, gap, drift, driftRun);
+        return new Thresholds(milliseconds, gap, drift, driftRun, clash);
     }
 
     /**
@@ -44,7 +61,7 @@ public record Thresholds(double clip, double gap, double drift, double driftRun)
      * @return these thresholds with the gap threshold replaced
      */
     public Thresholds withGap(double milliseconds) {
-        return new Thresholds(clip, milliseconds, drift, driftRun);
+        return new Thresholds(clip, milliseconds, drift, driftRun, clash);
     }
 
     /**
@@ -52,7 +69,7 @@ public record Thresholds(double clip, double gap, double drift, double driftRun)
      * @return these thresholds with the drift threshold replaced
      */
     public Thresholds withDrift(double milliseconds) {
-        return new Thresholds(clip, gap, milliseconds, driftRun);
+        return new Thresholds(clip, gap, milliseconds, driftRun, clash);
     }
 
     /**
@@ -60,7 +77,15 @@ public record Thresholds(double clip, double gap, double drift, double driftRun)
      * @return these thresholds with the drift run replaced
      */
     public Thresholds withDriftRun(double blows) {
-        return new Thresholds(clip, gap, drift, blows);
+        return new Thresholds(clip, gap, drift, blows, clash);
+    }
+
+    /**
+     * @param milliseconds the new clash margin
+     * @return these thresholds with the clash margin replaced
+     */
+    public Thresholds withClash(double milliseconds) {
+        return new Thresholds(clip, gap, drift, driftRun, milliseconds);
     }
 
     private static void requirePositive(String name, double value) {

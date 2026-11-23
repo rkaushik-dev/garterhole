@@ -10,6 +10,7 @@ import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 /**
@@ -18,8 +19,9 @@ import java.util.TreeMap;
  * <p>A number tells a band how badly they rang. A name tells them what to do
  * about it, and the names ringers use describe the shape of the error rather
  * than its size: clipping is striking too soon after the bell in front, gapping
- * is leaving too long, and drifting is being consistently on one side of where
- * you should be for a stretch of ringing.
+ * is leaving too long, drifting is being consistently on one side of where
+ * you should be for a stretch of ringing, and clashing is striking so close
+ * behind the bell in front that the two sound as one.
  */
 public final class Faults {
 
@@ -48,12 +50,10 @@ public final class Faults {
             throw new ValidationException("a list of blow errors is needed to find faults in it");
         }
         List<Fault> faults = new ArrayList<>();
+        BlowError previous = null;
         for (BlowError entry : errors) {
-            if (entry.error() <= -limits.clip()) {
-                faults.add(faultFrom(Kind.CLIP, entry));
-            } else if (entry.error() >= limits.gap()) {
-                faults.add(faultFrom(Kind.GAP, entry));
-            }
+            blowFault(entry, previous, limits).ifPresent(faults::add);
+            previous = entry;
         }
         faults.addAll(driftFaults(errors, limits));
         faults.sort(Comparator.comparingInt(Fault::rowIndex).thenComparingInt(Fault::place));
@@ -134,6 +134,8 @@ public final class Faults {
             case CLIP -> "bell " + fault.bell() + " clipped by " + size + "ms in row " + row;
             case GAP -> "bell " + fault.bell() + " left a " + size + "ms gap in row " + row;
             case DRIFT -> "bell " + fault.bell() + " drifted for " + size + " blows from row " + row;
+            case CLASH ->
+                "bell " + fault.bell() + " clashed with the bell in front, " + size + "ms apart in row " + row;
         };
     }
 
@@ -145,7 +147,23 @@ public final class Faults {
         return List.of(new Fault(Kind.DRIFT, bell, first.rowIndex(), first.place(), run.size()));
     }
 
-    private static Fault faultFrom(Kind kind, BlowError entry) {
-        return new Fault(kind, entry.bell(), entry.rowIndex(), entry.place(), entry.error());
+    /**
+     * What one blow did wrong, judged against the blow struck before it and
+     * against where it should have been. A clash is named before a clip,
+     * because two bells sounding as one is what the band heard, whichever of
+     * them was out.
+     */
+    private static Optional<Fault> blowFault(BlowError entry, BlowError previous, Thresholds limits) {
+        double apart = previous == null ? Double.POSITIVE_INFINITY : entry.at() - previous.at();
+        if (apart >= 0 && apart < limits.clash()) {
+            return Optional.of(new Fault(Kind.CLASH, entry.bell(), entry.rowIndex(), entry.place(), apart));
+        }
+        if (entry.error() <= -limits.clip()) {
+            return Optional.of(new Fault(Kind.CLIP, entry.bell(), entry.rowIndex(), entry.place(), entry.error()));
+        }
+        if (entry.error() >= limits.gap()) {
+            return Optional.of(new Fault(Kind.GAP, entry.bell(), entry.rowIndex(), entry.place(), entry.error()));
+        }
+        return Optional.empty();
     }
 }

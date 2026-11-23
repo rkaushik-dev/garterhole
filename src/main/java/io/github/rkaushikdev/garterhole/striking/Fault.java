@@ -9,8 +9,8 @@ import java.util.Locale;
  * @param bell the bell responsible
  * @param rowIndex the row it happened in, or started in for a drift, counted from zero
  * @param place the place it happened in, counted from one
- * @param size the error in milliseconds for a clip or a gap, or the number of
- *     blows for a drift
+ * @param size the error in milliseconds for a clip or a gap, the number of
+ *     blows for a drift, or the milliseconds between the two blows of a clash
  */
 public record Fault(Kind kind, int bell, int rowIndex, int place, double size) {
 
@@ -24,7 +24,9 @@ public record Fault(Kind kind, int bell, int rowIndex, int place, double size) {
         /** Left too long a gap after the bell in front. */
         GAP,
         /** Consistently early or late over a run of blows. */
-        DRIFT;
+        DRIFT,
+        /** Struck on top of the bell in front, so the two sound as one. */
+        CLASH;
 
         /**
          * @return the name as it is written in a document, for example {@code clip}

@@ -20,8 +20,14 @@ import org.junit.jupiter.api.Test;
 
 class FaultsTest {
 
+    /**
+     * A blow struck where the error puts it, with the bells of a row a fifth
+     * of a second apart and the rows a second apart, so that only an error
+     * this large brings two blows together.
+     */
     private static BlowError blow(int bell, int rowIndex, double error) {
-        return new BlowError(bell, rowIndex, 1, 0, 0, error);
+        double expected = rowIndex * 1000.0 + bell * 200;
+        return new BlowError(bell, rowIndex, 1, expected + error, expected, error);
     }
 
     private static List<BlowError> run(int bell, int rows, double error) {
@@ -87,6 +93,47 @@ class FaultsTest {
     }
 
     @Nested
+    class Clash {
+
+        @Test
+        void namesABlowStruckOnTopOfTheOneInFront() {
+            List<Fault> faults = findFaults(List.of(blow(1, 0, 0), blow(2, 0, -180)));
+            assertThat(faults).containsExactly(new Fault(Fault.Kind.CLASH, 2, 0, 1, 20));
+            assertThat(describeFault(faults.get(0)))
+                    .isEqualTo("bell 2 clashed with the bell in front, 20ms apart in row 1");
+        }
+
+        @Test
+        void namesTheClashRatherThanTheClipItAlsoIs() {
+            List<Fault> faults = findFaults(List.of(blow(1, 0, 0), blow(2, 0, -195)));
+            assertThat(faults).extracting(Fault::kind).containsExactly(Fault.Kind.CLASH);
+        }
+
+        @Test
+        void leavesTwoBlowsFurtherApartThanTheMarginAlone() {
+            assertThat(findFaults(List.of(blow(1, 0, 0), blow(2, 0, -160)), Thresholds.DEFAULT.withClip(500)))
+                    .isEmpty();
+            assertThat(findFaults(
+                            List.of(blow(1, 0, 0), blow(2, 0, -160)),
+                            Thresholds.DEFAULT.withClash(50).withClip(500)))
+                    .extracting(Fault::kind)
+                    .containsExactly(Fault.Kind.CLASH);
+        }
+
+        @Test
+        void countsAClashAmongTheKinds() {
+            assertThat(countFaults(List.of())).containsEntry(Fault.Kind.CLASH, 0);
+            assertThat(Fault.Kind.CLASH).hasToString("clash");
+        }
+
+        @Test
+        void keepsTheUsualMarginWhenTheOtherThresholdsAreGiven() {
+            assertThat(new Thresholds(50, 50, 30, 4).clash()).isEqualTo(Thresholds.DEFAULT_CLASH);
+            assertThatThrownBy(() -> Thresholds.DEFAULT.withClash(0)).hasMessageContaining("clash threshold");
+        }
+    }
+
+    @Nested
     class Drift {
 
         @Test
@@ -144,12 +191,12 @@ class FaultsTest {
 
         @Test
         void countsEachKind() {
-            assertThat(countFaults(faults())).isEqualTo(Map.of(CLIP, 1, GAP, 2, DRIFT, 0));
+            assertThat(countFaults(faults())).isEqualTo(Map.of(CLIP, 1, GAP, 2, DRIFT, 0, Fault.Kind.CLASH, 0));
         }
 
         @Test
         void countsNothingForNoFaults() {
-            assertThat(countFaults(List.of())).isEqualTo(Map.of(CLIP, 0, GAP, 0, DRIFT, 0));
+            assertThat(countFaults(List.of())).isEqualTo(Map.of(CLIP, 0, GAP, 0, DRIFT, 0, Fault.Kind.CLASH, 0));
         }
 
         @Test
