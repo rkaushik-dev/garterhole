@@ -15,6 +15,7 @@ import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.NamedCount
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.Score;
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.ScoreLine;
 import io.github.rkaushikdev.garterhole.core.Row;
+import io.github.rkaushikdev.garterhole.core.Stroke;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.method.PlainCourse;
 import java.util.List;
@@ -97,6 +98,71 @@ class MusicScorerTest {
             Score scored = scoreMusic(musical(), 8, scheme);
             assertThat(scored.lines()).hasSize(1);
             assertThat(scored.total()).isEqualTo(scored.lines().get(0).count() * 10.0);
+        }
+    }
+
+    @Nested
+    class CountingByStroke {
+
+        /** Rounds at backstroke, then a handstroke and a backstroke with the tenors reversed. */
+        private final List<Row> rows = parseRows("12345678 12345687 21436587 12345678");
+
+        @Test
+        void splitsTheRowsByStrokeFromTheBackstrokeRounds() {
+            assertThat(MusicScorer.atStroke(rows, Stroke.HANDSTROKE))
+                    .containsExactlyElementsOf(parseRows("12345687 12345678"));
+            assertThat(MusicScorer.atStroke(rows, Stroke.BACKSTROKE))
+                    .containsExactlyElementsOf(parseRows("12345678 21436587"));
+        }
+
+        @Test
+        void countsARuleOnlyAtItsStroke() {
+            MusicRule reversed = MusicRule.pattern("87s", "*87", 1);
+            assertThat(countRule(rows, reversed)).isEqualTo(2);
+            assertThat(countRule(rows, reversed.atStroke(Stroke.BACKSTROKE))).isEqualTo(1);
+            assertThat(countRule(rows, reversed.atStroke(Stroke.HANDSTROKE))).isEqualTo(1);
+            assertThat(reversed.atStroke(Stroke.BACKSTROKE).stroke()).contains(Stroke.BACKSTROKE);
+            assertThat(reversed.stroke()).isEmpty();
+        }
+    }
+
+    @Nested
+    class CompositionScheme {
+
+        @Test
+        void addsTheRollUpsOnMajorAndThePenaltyForTheTenorsReversed() {
+            List<MusicRule> scheme = MusicScorer.compositionScheme(8);
+            assertThat(scheme).containsAll(defaultScheme(8));
+            assertThat(scheme)
+                    .extracting(MusicRule::name)
+                    .contains("roll up 4578", "roll up 5478", "roll up 4678", "roll up 6478", "87 at backstroke");
+        }
+
+        @Test
+        void leavesTheRollUpsOffAnyOtherStage() {
+            assertThat(MusicScorer.compositionScheme(10))
+                    .extracting(MusicRule::name)
+                    .noneMatch(name -> name.startsWith("roll up"))
+                    .contains("09 at backstroke");
+        }
+
+        @Test
+        void scoresARollUpAndTakesOffForTheTenorsReversedAtBackstroke() {
+            List<Row> rows = parseRows("12345678 31264578 13246587 12345678");
+            Score scored = scoreMusic(rows, 8, MusicScorer.compositionScheme(8));
+            assertThat(scored.lines())
+                    .filteredOn(line -> line.name().equals("roll up 4578"))
+                    .extracting(ScoreLine::count)
+                    .containsExactly(1);
+            assertThat(scored.lines())
+                    .filteredOn(line -> line.name().equals("87 at backstroke"))
+                    .extracting(ScoreLine::score)
+                    .containsExactly(-1.0);
+        }
+
+        @Test
+        void refusesAStageTooSmallForIt() {
+            assertThatThrownBy(() -> MusicScorer.compositionScheme(5)).hasMessageContaining("no composition scheme");
         }
     }
 

@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.composition.music.Runs.RunCount;
+import io.github.rkaushikdev.garterhole.core.Bells;
 import io.github.rkaushikdev.garterhole.core.NamedRows;
 import io.github.rkaushikdev.garterhole.core.Row;
+import io.github.rkaushikdev.garterhole.core.Stroke;
 import io.github.rkaushikdev.garterhole.util.Json;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -154,7 +156,10 @@ public final class MusicScorer {
     }
 
     /**
-     * How many times a single rule fires over a block.
+     * How many times a single rule fires over a block. The rows are taken to
+     * start with the rounds a touch is rung from, which is a backstroke, so the
+     * first change is a handstroke; a rule tied to a stroke counts only the
+     * rows at that stroke.
      *
      * @param rows the rows
      * @param rule the rule
@@ -168,22 +173,72 @@ public final class MusicScorer {
         if (rule.weight().isEmpty() || !Double.isFinite(rule.weight().getAsDouble())) {
             throw new ValidationException("the rule " + Json.quote(rule.name()) + " has no weight");
         }
+        List<Row> counted = rule.stroke().map(only -> atStroke(rows, only)).orElse(rows);
         if (rule.pattern().isPresent()) {
-            return Patterns.countPattern(rows, rule.pattern().get());
+            return Patterns.countPattern(counted, rule.pattern().get());
         }
         if (rule.runLength().isPresent()) {
-            return Runs.countRuns(rows, rule.runLength().getAsInt()).total();
+            return Runs.countRuns(counted, rule.runLength().getAsInt()).total();
         }
         if (rule.namedRow().isPresent()) {
             String wanted = rule.namedRow().get();
             RowNames names = new RowNames();
-            return (int) rows.stream()
+            return (int) counted.stream()
                     .filter(row -> names.nameOf(row).filter(wanted::equals).isPresent())
                     .count();
         }
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("rule", rule.name());
         throw new ValidationException("the rule " + Json.quote(rule.name()) + " has nothing to count", details);
+    }
+
+    /**
+     * The rows rung at one stroke, the first row being the backstroke rounds a
+     * touch starts from.
+     *
+     * @param rows the rows
+     * @param stroke the stroke wanted
+     * @return the rows at that stroke, in order
+     */
+    public static List<Row> atStroke(List<Row> rows, Stroke stroke) {
+        List<Row> kept = new ArrayList<>();
+        for (int index = 0; index < rows.size(); index += 1) {
+            if (Stroke.at(index, Stroke.BACKSTROKE) == stroke) {
+                kept.add(rows.get(index));
+            }
+        }
+        return kept;
+    }
+
+    /**
+     * The scheme a composer scores a peal composition against: the default
+     * scheme, the combination roll ups on Major, and a point off for every row
+     * with the tenors reversed at the back at backstroke, which is the one
+     * blemish everybody outside hears.
+     *
+     * <p>The roll ups are the rows ending in two of the four, five and six
+     * followed by the seven and the eight, {@code 4578}, {@code 5478},
+     * {@code 4678} and {@code 6478}. The {@code 5678} and {@code 6578} endings
+     * are left to the runs and the default scheme.
+     *
+     * @param stage a number of bells, six or more
+     * @return the rules
+     * @throws ValidationException below six bells
+     */
+    public static List<MusicRule> compositionScheme(int stage) {
+        if (stage < 6) {
+            throw new ValidationException("there is no composition scheme on " + stage);
+        }
+        List<MusicRule> rules = new ArrayList<>(defaultScheme(stage));
+        if (stage == 8) {
+            for (String ending : List.of("4578", "5478", "4678", "6478")) {
+                rules.add(MusicRule.pattern("roll up " + ending, "*" + ending, 1));
+            }
+        }
+        String reversed = "" + Bells.symbol(stage) + Bells.symbol(stage - 1);
+        rules.add(MusicRule.pattern(reversed + " at backstroke", "*" + reversed, -1)
+                .atStroke(Stroke.BACKSTROKE));
+        return List.copyOf(rules);
     }
 
     /**

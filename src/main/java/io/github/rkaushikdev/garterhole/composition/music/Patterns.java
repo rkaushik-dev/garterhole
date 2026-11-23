@@ -117,14 +117,7 @@ public final class Patterns {
      * @return how many of the rows match it
      */
     public static int countPattern(Iterable<Row> rows, String pattern) {
-        List<PatternPart> parts = parsePattern(pattern);
-        int count = 0;
-        for (Row row : rows) {
-            if (matchesPattern(row, parts)) {
-                count += 1;
-            }
-        }
-        return count;
+        return findPattern(rows, pattern).size();
     }
 
     /**
