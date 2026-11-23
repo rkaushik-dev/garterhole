@@ -28,8 +28,8 @@ public final class NamedRows {
      */
     public static Row queens(int stage) {
         return build(stage, working -> {
-            List<Integer> bells = new ArrayList<>(odds(working));
-            bells.addAll(evens(working));
+            List<Integer> bells = new ArrayList<>(Bells.oddBells(working));
+            bells.addAll(Bells.evenBells(working));
             return bells;
         });
     }
@@ -40,9 +40,9 @@ public final class NamedRows {
      */
     public static Row kings(int stage) {
         return build(stage, working -> {
-            List<Integer> bells = new ArrayList<>(odds(working));
+            List<Integer> bells = new ArrayList<>(Bells.oddBells(working));
             Collections.reverse(bells);
-            bells.addAll(evens(working));
+            bells.addAll(Bells.evenBells(working));
             return bells;
         });
     }
@@ -125,22 +125,6 @@ public final class NamedRows {
                 .filter(entry -> entry.getValue().equals(row))
                 .map(Map.Entry::getKey)
                 .findFirst();
-    }
-
-    private static List<Integer> odds(int working) {
-        List<Integer> odds = new ArrayList<>();
-        for (int bell = 1; bell <= working; bell += 2) {
-            odds.add(bell);
-        }
-        return odds;
-    }
-
-    private static List<Integer> evens(int working) {
-        List<Integer> evens = new ArrayList<>();
-        for (int bell = 2; bell <= working; bell += 2) {
-            evens.add(bell);
-        }
-        return evens;
     }
 
     private static Row build(int stage, IntFunction<List<Integer>> bells) {

@@ -2,6 +2,8 @@ package io.github.rkaushikdev.garterhole.core;
 
 import io.github.rkaushikdev.garterhole.util.Guards;
 import io.github.rkaushikdev.garterhole.util.Json;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Bells are written with a single character each so that a row is a string a
@@ -96,6 +98,34 @@ public final class Bells {
      */
     public static int tenorOf(int stage) {
         return stage;
+    }
+
+    /**
+     * The odd bells of a stage, the treble first. Queens, Kings and the
+     * coursing order are all built from the odd bells and the even bells taken
+     * separately, so the split is worth naming once.
+     *
+     * @param stage a number of bells
+     * @return one, three, five and so on up to the stage, as a list that cannot be changed
+     */
+    public static List<Integer> oddBells(int stage) {
+        return everyOther(1, stage);
+    }
+
+    /**
+     * @param stage a number of bells
+     * @return two, four, six and so on up to the stage, as a list that cannot be changed
+     */
+    public static List<Integer> evenBells(int stage) {
+        return everyOther(2, stage);
+    }
+
+    private static List<Integer> everyOther(int first, int stage) {
+        List<Integer> bells = new ArrayList<>();
+        for (int bell = first; bell <= stage; bell += 2) {
+            bells.add(bell);
+        }
+        return List.copyOf(bells);
     }
 
     private static int indexOf(char symbol) {
