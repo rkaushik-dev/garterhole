@@ -9,6 +9,7 @@ import io.github.rkaushikdev.garterhole.method.LeadHeadCode;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.method.MethodSerialiser;
 import io.github.rkaushikdev.garterhole.method.Title;
+import io.github.rkaushikdev.garterhole.records.Firsts;
 import io.github.rkaushikdev.garterhole.records.Performance;
 import io.github.rkaushikdev.garterhole.records.PerformanceDocument;
 import io.github.rkaushikdev.garterhole.records.PerformanceValidator;
@@ -71,8 +72,18 @@ public final class Service {
      *
      * @param id the identifier the performance was filed under
      * @param warnings things that did not stop it being filed
+     * @param suggestedFootnotes the firsts and milestones the earlier records say it has earned
      */
-    public record Filed(String id, List<String> warnings) {}
+    public record Filed(String id, List<String> warnings, List<String> suggestedFootnotes) {
+
+        /**
+         * @param id the identifier the performance was filed under
+         * @param warnings things that did not stop it being filed
+         */
+        public Filed(String id, List<String> warnings) {
+            this(id, warnings, List.of());
+        }
+    }
 
     /**
      * How much the service holds, for the health route.
@@ -212,7 +223,8 @@ public final class Service {
     }
 
     /**
-     * File a performance, checking it first and refusing a repeat.
+     * File a performance, checking it first and refusing a repeat, and say
+     * which footnotes the records already filed say it has earned.
      *
      * @param fields the performance, with its date written {@code 2025-05-18}
      * @return the identifier it was filed under and any warnings
@@ -228,10 +240,13 @@ public final class Service {
         if (repository.has(PERFORMANCES, rung.id())) {
             throw new ConflictException("this performance is already filed as " + Json.quote(rung.id()));
         }
+        List<Performance> earlier =
+                listPerformances().stream().map(Performance::fromDocument).toList();
+        List<String> suggested = Firsts.suggestFootnotes(rung, earlier);
         return UnitOfWork.inUnitOfWork(repository, unit -> {
             unit.put(PERFORMANCES, rung.id(), PerformanceDocument.write(rung));
             logger.info("performance filed", Map.of("id", rung.id()));
-            return new Filed(rung.id(), verdict.warnings());
+            return new Filed(rung.id(), verdict.warnings(), suggested);
         });
     }
 

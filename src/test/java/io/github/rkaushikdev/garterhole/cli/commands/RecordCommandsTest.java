@@ -75,6 +75,13 @@ class RecordCommandsTest {
         }
 
         @Test
+        void mentionsTheFootnotesTheQuarterHasEarned() {
+            Output.Collected collected = Output.collecting();
+            fileRecord(args(QUARTER_LINE), onTheDay(collected));
+            assertThat(collected.err()).contains("footnote it has earned: First quarter peal for Bob.");
+        }
+
+        @Test
         void usesTodayWhenNoDateIsGiven() {
             fileRecord(args(QUARTER_LINE), onTheDay(Output.collecting()));
             assertThat(service.listPerformances().get(0).get("date").asText()).isEqualTo("2025-05-18");

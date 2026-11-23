@@ -28,18 +28,33 @@ import java.util.regex.Pattern;
  */
 public record Footnote(String text, Kind kind, List<String> names) {
 
-    /** The kinds of footnote that are recognised, in the order they are listed. */
+    /**
+     * The kinds of footnote that are recognised, in the order they are tried,
+     * each with the shape that gives it away.
+     */
     public enum Kind {
         /** A first, of a method, a stage or a length. */
-        FIRST,
+        FIRST("^(?:first|1st)\\b"),
+        /** A milestone, such as a hundredth peal. */
+        MILESTONE("^\\d+(?:st|nd|rd|th)\\s+(?:peal|quarter)"),
         /** Rung for a birthday. */
-        BIRTHDAY,
+        BIRTHDAY("\\bbirthday\\b"),
         /** Rung in memory of somebody. */
-        MEMORIAL,
+        MEMORIAL("\\b(?:memory|memoriam|rip)\\b"),
         /** Rung for a wedding. */
-        WEDDING,
+        WEDDING("\\b(?:wedding|marriage)\\b"),
         /** Anything else. */
-        OTHER;
+        OTHER(null);
+
+        private final Pattern shape;
+
+        Kind(String shape) {
+            this.shape = shape == null ? null : Pattern.compile(shape, Pattern.CASE_INSENSITIVE);
+        }
+
+        private boolean fits(String line) {
+            return shape != null && shape.matcher(line).find();
+        }
 
         @Override
         public String toString() {
@@ -58,9 +73,6 @@ public record Footnote(String text, Kind kind, List<String> names) {
 
     private static final Pattern PUNCTUATION = Pattern.compile("[.,;!?]");
 
-    /** The shape of each recognised kind, tried in order. */
-    private static final Map<Kind, Pattern> PATTERNS = patterns();
-
     /**
      * @param text the footnote
      * @param kind what kind of footnote it is
@@ -76,12 +88,7 @@ public record Footnote(String text, Kind kind, List<String> names) {
      */
     public static Kind kindOf(String text) {
         String line = squashed(text);
-        for (Map.Entry<Kind, Pattern> entry : PATTERNS.entrySet()) {
-            if (entry.getValue().matcher(line).find()) {
-                return entry.getKey();
-            }
-        }
-        return Kind.OTHER;
+        return KINDS.stream().filter(kind -> kind.fits(line)).findFirst().orElse(Kind.OTHER);
     }
 
     /**
@@ -164,6 +171,41 @@ public record Footnote(String text, Kind kind, List<String> names) {
     }
 
     /**
+     * Write the footnote a milestone would get.
+     *
+     * @param name who reached it
+     * @param count which one it is, for example a hundred
+     * @param what for example {@code peal}
+     * @return the sentence, for example {@code 100th peal for Bob Hart.}
+     * @throws ValidationException when the name or the thing is blank, or the count is not one
+     */
+    public static String milestoneFootnote(String name, int count, String what) {
+        String who = squashed(name);
+        String thing = squashed(what);
+        if (who.isEmpty() || thing.isEmpty() || count < 1) {
+            throw new ValidationException("a milestone needs somebody, a count and something");
+        }
+        return ordinal(count) + " " + thing + " for " + who + ".";
+    }
+
+    /**
+     * @param count a number, one or more
+     * @return the number written as a board writes a place, for example {@code 21st} or {@code 112th}
+     */
+    public static String ordinal(int count) {
+        int lastTwo = count % 100;
+        if (lastTwo >= 11 && lastTwo <= 13) {
+            return count + "th";
+        }
+        return switch (count % 10) {
+            case 1 -> count + "st";
+            case 2 -> count + "nd";
+            case 3 -> count + "rd";
+            default -> count + "th";
+        };
+    }
+
+    /**
      * Group footnotes by kind, so that a report can put the firsts together.
      *
      * @param footnotes the lines
@@ -181,14 +223,5 @@ public record Footnote(String text, Kind kind, List<String> names) {
 
     private static String squashed(String text) {
         return Text.squash(text == null ? "" : text);
-    }
-
-    private static Map<Kind, Pattern> patterns() {
-        Map<Kind, Pattern> patterns = new LinkedHashMap<>();
-        patterns.put(Kind.FIRST, Pattern.compile("^(?:first|1st)\\b", Pattern.CASE_INSENSITIVE));
-        patterns.put(Kind.BIRTHDAY, Pattern.compile("\\bbirthday\\b", Pattern.CASE_INSENSITIVE));
-        patterns.put(Kind.MEMORIAL, Pattern.compile("\\b(?:memory|memoriam|rip)\\b", Pattern.CASE_INSENSITIVE));
-        patterns.put(Kind.WEDDING, Pattern.compile("\\b(?:wedding|marriage)\\b", Pattern.CASE_INSENSITIVE));
-        return Collections.unmodifiableMap(patterns);
     }
 }

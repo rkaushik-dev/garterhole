@@ -55,6 +55,13 @@ class FootnoteTest {
         }
 
         @Test
+        void recognisesAMilestone() {
+            assertThat(kindOf("100th peal for Bob Hart.")).isEqualTo(Footnote.Kind.MILESTONE);
+            assertThat(kindOf("21st Quarter peal together")).isEqualTo(Footnote.Kind.MILESTONE);
+            assertThat(kindOf("100 years since the bells were rehung")).isEqualTo(OTHER);
+        }
+
+        @Test
         void listsTheKindsItKnows() {
             assertThat(KINDS).contains(FIRST);
             assertThat(FIRST).hasToString("first");
@@ -149,6 +156,26 @@ class FootnoteTest {
 
     @Nested
     class GroupByKind {
+
+        @Test
+        void writesAMilestoneTheWayABoardDoes() {
+            assertThat(Footnote.milestoneFootnote("Bob Hart", 100, "peal")).isEqualTo("100th peal for Bob Hart.");
+            assertThat(kindOf(Footnote.milestoneFootnote("Bob", 250, "quarter peal")))
+                    .isEqualTo(Footnote.Kind.MILESTONE);
+            assertThatThrownBy(() -> Footnote.milestoneFootnote("Bob", 0, "peal"))
+                    .isInstanceOf(ValidationException.class);
+            assertThatThrownBy(() -> Footnote.milestoneFootnote(" ", 5, "peal"))
+                    .isInstanceOf(ValidationException.class);
+        }
+
+        @Test
+        void writesOrdinalsWithTheTeensLeftAlone() {
+            assertThat(List.of(1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111, 112))
+                    .extracting(Footnote::ordinal)
+                    .containsExactly(
+                            "1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "101st",
+                            "111th", "112th");
+        }
 
         @Test
         void putsTheFirstsTogether() {

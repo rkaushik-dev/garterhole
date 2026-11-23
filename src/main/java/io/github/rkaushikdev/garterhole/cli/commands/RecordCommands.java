@@ -79,6 +79,7 @@ public final class RecordCommands {
         }
         Service.Filed filed = context.service().filePerformance(fields);
         filed.warnings().forEach(context.output()::note);
+        filed.suggestedFootnotes().forEach(line -> context.output().note("footnote it has earned: " + line));
         context.output().note("filed as " + filed.id());
         context.output().answer(filed);
     }
