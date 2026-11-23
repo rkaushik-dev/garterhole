@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.rkaushikdev.garterhole.composition.music.MusicRule;
+import io.github.rkaushikdev.garterhole.composition.music.MusicScorer;
+import io.github.rkaushikdev.garterhole.core.Row;
+import io.github.rkaushikdev.garterhole.core.RowParse;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.util.Json;
 import java.util.ArrayList;
@@ -88,5 +92,37 @@ class TouchAnalysisTest {
         TouchAnalysis analysis = Analysis.analyseTouch(request);
         assertThat(analysis.comesRound()).isTrue();
         assertThat(analysis.proof().isTrue()).isTrue();
+    }
+
+    @Test
+    void ringsFromAnotherRowAndComesRoundWhenItGetsBackThere() {
+        Row queens = RowParse.parseRow("13572468");
+        TouchAnalysis fromQueens = Analysis.analyseTouch(
+                Analysis.Request.of(plainBobMajor(), "3(H)").from(queens));
+        assertThat(fromQueens.comesRound()).isTrue();
+        assertThat(fromQueens.length()).isEqualTo(336);
+        assertThat(fromQueens.proof().isTrue()).isTrue();
+        assertThat(fromQueens.music().named())
+                .extracting(MusicScorer.NamedCount::name)
+                .contains("Queens");
+    }
+
+    @Test
+    void scoresTheMusicOnTheSchemeItIsGiven() {
+        TouchAnalysis plain = Analysis.analyseTouch(plainBobMajor(), "3(H)");
+        TouchAnalysis scored = Analysis.analyseTouch(
+                Analysis.Request.of(plainBobMajor(), "3(H)").scoredBy(MusicScorer.compositionScheme(8)));
+        List<Row> rows = TouchExpander.expandTouch(plainBobMajor(), TouchParser.parseTouch("3(H)"))
+                .block()
+                .rows();
+        double expected = MusicScorer.scoreMusic(rows.subList(0, rows.size() - 1), 8, MusicScorer.compositionScheme(8))
+                .total();
+        assertThat(scored.music().score()).isEqualTo(expected);
+        assertThat(scored.music().runs()).isEqualTo(plain.music().runs());
+        assertThat(Analysis.analyseTouch(Analysis.Request.of(plainBobMajor(), "3(H)")
+                                .scoredBy(List.of(MusicRule.pattern("nothing", "*9", 1))))
+                        .music()
+                        .score())
+                .isZero();
     }
 }

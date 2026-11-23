@@ -8,6 +8,7 @@ import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.PartsFound;
 import io.github.rkaushikdev.garterhole.composition.TouchAnalysis.TenorsFound;
 import io.github.rkaushikdev.garterhole.composition.TouchExpander.Rung;
 import io.github.rkaushikdev.garterhole.composition.TouchExpander.RungLead;
+import io.github.rkaushikdev.garterhole.composition.music.MusicRule;
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer;
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.MusicSummary;
 import io.github.rkaushikdev.garterhole.composition.music.MusicScorer.RunLine;
@@ -41,21 +42,24 @@ public final class Analysis {
     private Analysis() {}
 
     /**
-     * What to analyse. The calls and the observation bell default as they do
-     * when a touch is rung.
+     * What to analyse. The calls, the observation bell and the start default as
+     * they do when a touch is rung, and the music is scored on the default
+     * scheme unless another is given.
+     *
+     * @param method the method
+     * @param touch the touch, as written
+     * @param calls the calls to ring, by role, or {@code null} for the standard ones
+     * @param observation the bell whose place names the calling positions, or {@code null} for the tenor
+     * @param start the row to ring from, or {@code null} for rounds
+     * @param scheme the music scheme to score against, or {@code null} for the default
      */
-    public static final class Request {
-        private final Method method;
-        private final String touch;
-        private final Map<String, Call> calls;
-        private final Integer observation;
-
-        private Request(Method method, String touch, Map<String, Call> calls, Integer observation) {
-            this.method = method;
-            this.touch = touch;
-            this.calls = calls;
-            this.observation = observation;
-        }
+    public record Request(
+            Method method,
+            String touch,
+            Map<String, Call> calls,
+            Integer observation,
+            Row start,
+            List<MusicRule> scheme) {
 
         /**
          * @param method the method
@@ -63,7 +67,7 @@ public final class Analysis {
          * @return a request with the calls and observation bell at their defaults
          */
         public static Request of(Method method, String touch) {
-            return new Request(method, touch, null, null);
+            return new Request(method, touch, null, null, null, null);
         }
 
         /**
@@ -71,7 +75,7 @@ public final class Analysis {
          * @return this request with its own calls
          */
         public Request withCalls(Map<String, Call> chosen) {
-            return new Request(method, touch, chosen, observation);
+            return new Request(method, touch, chosen, observation, start, scheme);
         }
 
         /**
@@ -79,7 +83,27 @@ public final class Analysis {
          * @return this request with another observation bell
          */
         public Request withObservation(int bell) {
-            return new Request(method, touch, calls, bell);
+            return new Request(method, touch, calls, bell, start, scheme);
+        }
+
+        /**
+         * A touch started from somewhere other than rounds, such as the row a
+         * set of call changes left the band in, comes round when it gets back
+         * to that row, and its music is scored on the rows it actually rang.
+         *
+         * @param row the row to ring from
+         * @return this request ringing from that row
+         */
+        public Request from(Row row) {
+            return new Request(method, touch, calls, observation, row, scheme);
+        }
+
+        /**
+         * @param rules the music scheme to score against, such as the composition scheme
+         * @return this request scoring the music that way
+         */
+        public Request scoredBy(List<MusicRule> rules) {
+            return new Request(method, touch, calls, observation, start, List.copyOf(rules));
         }
     }
 
@@ -146,20 +170,20 @@ public final class Analysis {
             throw new ValidationException("the touch must be written out as a string");
         }
         Method method = request.method;
-        TouchExpander.Request ringing = TouchExpander.Request.of(method, TouchParser.parseTouch(request.touch));
-        if (request.calls != null) {
-            ringing = ringing.withCalls(request.calls);
-        }
-        if (request.observation != null) {
-            ringing = ringing.withObservation(request.observation);
-        }
-        Rung rung = TouchExpander.expandTouch(ringing);
+        Rung rung = TouchExpander.expandTouch(new TouchExpander.Request(
+                method,
+                TouchParser.parseTouch(request.touch),
+                request.calls,
+                request.observation,
+                request.start,
+                null));
         Proof proof = Prover.prove(rung.block());
         Optional<Parts> detected = PartStructure.detectParts(
                 rung.leads().stream().map(RungLead::leadHead).toList());
         int length = rung.block().changeCount();
         List<Row> rows = rung.block().rows();
-        MusicSummary music = MusicScorer.musicSummary(rows.subList(0, rows.size() - 1), method.stage());
+        List<MusicRule> scheme = request.scheme != null ? request.scheme : MusicScorer.defaultScheme(method.stage());
+        MusicSummary music = MusicScorer.musicSummary(rows.subList(0, rows.size() - 1), method.stage(), scheme);
         return new TouchAnalysis(
                 Title.of(method),
                 length,

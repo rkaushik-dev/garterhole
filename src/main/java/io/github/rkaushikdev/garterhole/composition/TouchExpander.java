@@ -54,29 +54,17 @@ public final class TouchExpander {
      * calls for the method, the tenor as the observation bell, rounds as the
      * start, and ringing on to rounds when the touch is written as calling
      * positions.
+     *
+     * @param method the method
+     * @param touch the touch, read
+     * @param calls the calls to ring, by role, or {@code null} for the standard ones
+     * @param observation the bell whose place names the calling positions, or {@code null} for the tenor
+     * @param start the row the touch starts from, or {@code null} for rounds
+     * @param ringToRounds whether to ring plain leads until the touch comes round, or
+     *     {@code null} to do so only for a touch written as calling positions
      */
-    public static final class Request {
-        private final Method method;
-        private final Touch touch;
-        private final Map<String, Call> calls;
-        private final Integer observation;
-        private final Row start;
-        private final Boolean ringToRounds;
-
-        private Request(
-                Method method,
-                Touch touch,
-                Map<String, Call> calls,
-                Integer observation,
-                Row start,
-                Boolean ringToRounds) {
-            this.method = method;
-            this.touch = touch;
-            this.calls = calls;
-            this.observation = observation;
-            this.start = start;
-            this.ringToRounds = ringToRounds;
-        }
+    public record Request(
+            Method method, Touch touch, Map<String, Call> calls, Integer observation, Row start, Boolean ringToRounds) {
 
         /**
          * @param method the method

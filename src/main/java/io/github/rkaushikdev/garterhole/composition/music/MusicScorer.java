@@ -249,8 +249,22 @@ public final class MusicScorer {
      * @return the score, the run table and the named rows rung
      */
     public static MusicSummary musicSummary(Iterable<Row> rows, int stage) {
+        return musicSummary(rows, stage, defaultScheme(stage));
+    }
+
+    /**
+     * A summary of the music in a block, with the score taken on a scheme of
+     * the caller's choosing. The run table and the named rows do not depend on
+     * the scheme.
+     *
+     * @param rows the rows
+     * @param stage the stage they are at
+     * @param scheme the rules the score is taken on
+     * @return the score, the run table and the named rows rung
+     */
+    public static MusicSummary musicSummary(Iterable<Row> rows, int stage, List<MusicRule> scheme) {
         List<Row> kept = listOf(rows);
-        double total = scoreMusic(kept, stage).total();
+        double total = scoreMusic(kept, stage, scheme).total();
         List<RunLine> runs = new ArrayList<>();
         for (Map.Entry<Integer, RunCount> entry : Runs.runTable(kept, stage).entrySet()) {
             RunCount counts = entry.getValue();
