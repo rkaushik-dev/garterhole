@@ -13,6 +13,8 @@ import io.github.rkaushikdev.garterhole.records.PerformanceCollection.Query;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -212,6 +214,31 @@ class PerformanceCollectionTest {
             stMary.kind(Lengths.Kind.PEAL);
             assertThat(records.find(stMary)).hasSize(2);
             assertThat(Query.ALL.matches(rung())).isTrue();
+        }
+
+        @Test
+        void readsAQueryFromTheFieldsASearchSends() {
+            Map<String, String> sent = Map.of("tower", "st mary", "kind", "peal", "stage", "Minor");
+            Query query = Query.fromFields(name -> Optional.ofNullable(sent.get(name)));
+            assertThat(records.find(query)).hasSize(1);
+            Map<String, String> dates = Map.of("from", "2025-03-09", "to", "2025-07-02", "class", "Surprise");
+            assertThat(records.find(Query.fromFields(name -> Optional.ofNullable(dates.get(name)))))
+                    .hasSize(1);
+            assertThat(Query.fromFields(name -> Optional.empty()).matches(rung()))
+                    .isTrue();
+        }
+
+        @Test
+        void refusesAFieldItCannotRead() {
+            assertThatThrownBy(
+                            () -> Query.fromFields(name -> name.equals("stage") ? Optional.of("x") : Optional.empty()))
+                    .hasMessage("\"x\" is not a stage");
+            assertThatThrownBy(() ->
+                            Query.fromFields(name -> name.equals("handbells") ? Optional.of("yes") : Optional.empty()))
+                    .hasMessage("handbells must be true or false, not \"yes\"");
+            assertThatThrownBy(
+                            () -> Query.fromFields(name -> name.equals("from") ? Optional.of("May") : Optional.empty()))
+                    .isInstanceOf(ValidationException.class);
         }
 
         @Test

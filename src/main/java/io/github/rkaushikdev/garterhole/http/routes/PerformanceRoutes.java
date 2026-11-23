@@ -2,14 +2,13 @@ package io.github.rkaushikdev.garterhole.http.routes;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 import io.github.rkaushikdev.garterhole.Service;
-import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.http.Context;
 import io.github.rkaushikdev.garterhole.http.Pagination;
 import io.github.rkaushikdev.garterhole.http.Response;
 import io.github.rkaushikdev.garterhole.http.Router;
 import io.github.rkaushikdev.garterhole.records.Performance;
+import io.github.rkaushikdev.garterhole.records.PerformanceCollection;
 import io.github.rkaushikdev.garterhole.records.PerformanceValidator;
 import io.github.rkaushikdev.garterhole.records.Statistics;
 import io.github.rkaushikdev.garterhole.records.Writers;
@@ -18,9 +17,7 @@ import io.github.rkaushikdev.garterhole.validation.Schema;
 import io.github.rkaushikdev.garterhole.validation.Schemas;
 import io.github.rkaushikdev.garterhole.validation.Types;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Performance records over HTTP.
@@ -62,16 +59,8 @@ public final class PerformanceRoutes {
      */
     public static Router add(Router router) {
         router.get("/performances", (request, context) -> {
-            Optional<String> wantedTower = request.queryValue("tower").map(tower -> tower.toLowerCase(Locale.ROOT));
-            Optional<String> wantedRinger = request.queryValue("ringer");
-            List<JsonNode> filtered = context.service().listPerformances().stream()
-                    .filter(entry -> wantedTower.isEmpty()
-                            || entry.path("tower")
-                                    .asText()
-                                    .toLowerCase(Locale.ROOT)
-                                    .contains(wantedTower.get()))
-                    .filter(entry -> wantedRinger.isEmpty() || rang(entry, wantedRinger.get()))
-                    .toList();
+            List<JsonNode> filtered =
+                    context.service().findPerformances(PerformanceCollection.Query.fromFields(request::queryValue));
             return Response.json(Pagination.paginate(request, filtered, "performances"));
         });
 
@@ -93,12 +82,7 @@ public final class PerformanceRoutes {
         });
 
         router.get("/report", (request, context) -> {
-            String format = request.queryValue("format", "text");
-            if (!Writers.formats().contains(format)) {
-                throw new ValidationException(
-                        Json.quote(format) + " is not a format, so try one of " + String.join(", ", Writers.formats()));
-            }
-            Writers.Writer writer = Writers.writerNamed(format);
+            Writers.Writer writer = Writers.writerNamed(request.queryValue("format", "text"));
             Writers.Options options = request.queryValue("title")
                     .map(Writers.Options.DEFAULT::withTitle)
                     .orElse(Writers.Options.DEFAULT);
@@ -120,15 +104,6 @@ public final class PerformanceRoutes {
         });
 
         return router;
-    }
-
-    private static boolean rang(JsonNode entry, String ringer) {
-        for (JsonNode name : entry.path("band")) {
-            if (name.equals(TextNode.valueOf(ringer))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static List<Performance> performancesOf(Context context) {

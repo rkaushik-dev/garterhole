@@ -151,6 +151,34 @@ class PerformanceRoutesTest {
         }
 
         @Test
+        void filtersByLengthAndStageAndClass() {
+            assertThat(ask("GET", "/performances?kind=peal")
+                            .body()
+                            .path("total")
+                            .asInt())
+                    .isEqualTo(1);
+            assertThat(ask("GET", "/performances?stage=Minor&class=Bob")
+                            .body()
+                            .path("total")
+                            .asInt())
+                    .isEqualTo(2);
+            assertThat(ask("GET", "/performances?stage=8").body().path("total").asInt())
+                    .isZero();
+            assertThat(ask("GET", "/performances?handbells=false&conductor=Alice")
+                            .body()
+                            .path("total")
+                            .asInt())
+                    .isEqualTo(2);
+        }
+
+        @Test
+        void refusesAFieldItCannotRead() {
+            assertThat(ask("GET", "/performances?stage=Octuples").status()).isEqualTo(400);
+            assertThat(ask("GET", "/performances?handbells=sometimes").status()).isEqualTo(400);
+            assertThat(ask("GET", "/report?format=pdf").status()).isEqualTo(400);
+        }
+
+        @Test
         void filtersByWhoRang() {
             assertThat(ask("GET", "/performances?ringer=Alice")
                             .body()

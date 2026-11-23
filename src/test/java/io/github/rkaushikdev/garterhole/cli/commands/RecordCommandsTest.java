@@ -157,6 +157,22 @@ class RecordCommandsTest {
         }
 
         @Test
+        void filtersByLengthAndByDate() {
+            Output.Collected peals = Output.collecting();
+            listRecords(args("list --kind peal"), context(peals));
+            assertThat(peals.out()).hasSize(2);
+            Output.Collected june = Output.collecting();
+            listRecords(args("list --from 2025-05-20 --to 2025-07-01"), context(june));
+            assertThat(june.out()).hasSize(2).last().asString().contains("5040");
+        }
+
+        @Test
+        void refusesALengthItDoesNotKnow() {
+            assertThatThrownBy(() -> listRecords(args("list --kind extent"), context(Output.collecting())))
+                    .hasMessageContaining("is not a kind of performance");
+        }
+
+        @Test
         void saysSoWhenNothingIsFiled() {
             Output.Collected collected = Output.collecting();
             listRecords(args("list"), new CommandContext(emptyService(), collected.output()));

@@ -12,6 +12,7 @@ import io.github.rkaushikdev.garterhole.cli.CommandContext;
 import io.github.rkaushikdev.garterhole.cli.FlagSpec;
 import io.github.rkaushikdev.garterhole.cli.ParsedArgs;
 import io.github.rkaushikdev.garterhole.records.Performance;
+import io.github.rkaushikdev.garterhole.records.PerformanceCollection;
 import io.github.rkaushikdev.garterhole.records.PerformanceReport;
 import io.github.rkaushikdev.garterhole.records.Writers;
 import io.github.rkaushikdev.garterhole.util.Json;
@@ -22,7 +23,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.StreamSupport;
 
 /**
  * The performance commands.
@@ -47,6 +47,12 @@ public final class RecordCommands {
             "duration", FlagSpec.VALUE,
             "format", FlagSpec.value("f"),
             "ringer", FlagSpec.VALUE,
+            "stage", FlagSpec.VALUE,
+            "class", FlagSpec.VALUE,
+            "kind", FlagSpec.VALUE,
+            "handbells", FlagSpec.VALUE,
+            "from", FlagSpec.VALUE,
+            "to", FlagSpec.VALUE,
             "json", FlagSpec.SWITCH,
             "quiet", FlagSpec.SWITCH);
 
@@ -85,16 +91,16 @@ public final class RecordCommands {
     }
 
     /**
-     * {@code records list [--ringer Alice]}
+     * {@code records list [--ringer Alice] [--stage 8] [--class Surprise] [--kind "quarter peal"]},
+     * narrowed by any of the fields a performance search takes.
      *
      * @param parsed the command line
      * @param context the service and the output
+     * @throws ValidationException when a field cannot be read
      */
     public static void listRecords(ParsedArgs parsed, CommandContext context) {
-        Optional<String> ringer = parsed.asText("ringer");
-        List<JsonNode> records = context.service().listPerformances().stream()
-                .filter(entry -> ringer.isEmpty() || rangIn(entry, ringer.get()))
-                .toList();
+        List<JsonNode> records =
+                context.service().findPerformances(PerformanceCollection.Query.fromFields(parsed::asText));
         if (context.output().json()) {
             context.output().answer(records);
             return;
@@ -123,15 +129,11 @@ public final class RecordCommands {
      * @throws ValidationException when the format is not one of the writers
      */
     public static void reportRecords(ParsedArgs parsed, CommandContext context) {
-        String format = requireFlag(parsed, "format", "text");
-        if (!Writers.formats().contains(format)) {
-            throw new ValidationException(
-                    Json.quote(format) + " is not a format, so try one of " + String.join(", ", Writers.formats()));
-        }
+        Writers.Writer writer = Writers.writerNamed(requireFlag(parsed, "format", "text"));
         List<Performance> records = context.service().listPerformances().stream()
                 .map(Performance::fromDocument)
                 .toList();
-        context.output().answer(Writers.writerNamed(format).write(records));
+        context.output().answer(writer.write(records));
     }
 
     /**
@@ -153,10 +155,5 @@ public final class RecordCommands {
                         .findFirst();
         JsonNode found = wanted.orElseThrow(() -> new ValidationException("there is no performance to print"));
         context.output().answer(found, document -> PerformanceReport.boardLines(Performance.fromDocument(document)));
-    }
-
-    private static boolean rangIn(JsonNode entry, String ringer) {
-        return StreamSupport.stream(entry.path("band").spliterator(), false)
-                .anyMatch(name -> name.isTextual() && name.textValue().equals(ringer));
     }
 }

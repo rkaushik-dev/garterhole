@@ -4,10 +4,12 @@ import io.github.rkaushikdev.garterhole.ConflictException;
 import io.github.rkaushikdev.garterhole.NotFoundException;
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.composition.Lengths;
+import io.github.rkaushikdev.garterhole.core.Stage;
 import io.github.rkaushikdev.garterhole.method.Title;
 import io.github.rkaushikdev.garterhole.util.CollectionHelpers;
 import io.github.rkaushikdev.garterhole.util.Json;
 import io.github.rkaushikdev.garterhole.util.Text;
+import io.github.rkaushikdev.garterhole.validation.Coerce;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -17,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -185,6 +188,70 @@ public final class PerformanceCollection implements Iterable<Performance> {
 
         private Query(List<Predicate<Performance>> narrowings) {
             this.narrowings = List.copyOf(narrowings);
+        }
+
+        /**
+         * Build a query from the fields a search sends, by name, so that the
+         * HTTP surface and the command line ask the same questions the same
+         * way: {@code tower}, {@code title}, {@code ringer}, {@code conductor},
+         * {@code kind} as a record writes it, {@code stage} as a number or a
+         * name, {@code class}, {@code handbells} as {@code true} or
+         * {@code false}, and {@code from} and {@code to} as dates.
+         *
+         * @param field looks a field up by name, giving nothing when it was not sent
+         * @return the query, narrowed by every field that was sent
+         * @throws ValidationException naming the first field that cannot be read
+         */
+        public static Query fromFields(Function<String, Optional<String>> field) {
+            Query query = ALL;
+            for (String name :
+                    List.of("tower", "title", "ringer", "conductor", "kind", "stage", "class", "handbells")) {
+                Optional<String> value = field.apply(name);
+                if (value.isPresent()) {
+                    query = query.narrowedBy(name, value.get());
+                }
+            }
+            Optional<String> from = field.apply("from");
+            if (from.isPresent()) {
+                query = query.from(Coerce.toDate(from.get(), "from"));
+            }
+            Optional<String> to = field.apply("to");
+            if (to.isPresent()) {
+                query = query.to(Coerce.toDate(to.get(), "to"));
+            }
+            return query;
+        }
+
+        private Query narrowedBy(String name, String value) {
+            return switch (name) {
+                case "tower" -> tower(value);
+                case "title" -> title(value);
+                case "ringer" -> ringer(value);
+                case "conductor" -> conductor(value);
+                case "kind" -> kind(Lengths.Kind.fromLabel(value));
+                case "stage" -> stage(stageOf(value));
+                case "class" -> className(value);
+                default -> handbells(flagOf(name, value));
+            };
+        }
+
+        private static int stageOf(String value) {
+            double number = Coerce.readNumber(value);
+            if (number == Math.rint(number) && Stage.isSupported(number)) {
+                return (int) number;
+            }
+            try {
+                return Stage.fromName(value);
+            } catch (IllegalArgumentException notAStage) {
+                throw new ValidationException(Json.quote(value) + " is not a stage");
+            }
+        }
+
+        private static boolean flagOf(String name, String value) {
+            if (!value.equals("true") && !value.equals("false")) {
+                throw new ValidationException(name + " must be true or false, not " + Json.quote(value));
+            }
+            return value.equals("true");
         }
 
         /**

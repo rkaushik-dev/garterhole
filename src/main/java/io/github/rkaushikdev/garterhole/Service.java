@@ -11,6 +11,7 @@ import io.github.rkaushikdev.garterhole.method.MethodSerialiser;
 import io.github.rkaushikdev.garterhole.method.Title;
 import io.github.rkaushikdev.garterhole.records.Firsts;
 import io.github.rkaushikdev.garterhole.records.Performance;
+import io.github.rkaushikdev.garterhole.records.PerformanceCollection;
 import io.github.rkaushikdev.garterhole.records.PerformanceDocument;
 import io.github.rkaushikdev.garterhole.records.PerformanceValidator;
 import io.github.rkaushikdev.garterhole.store.Repository;
@@ -220,6 +221,18 @@ public final class Service {
      */
     public List<JsonNode> listPerformances() {
         return documentsIn(PERFORMANCES);
+    }
+
+    /**
+     * The performances that answer a query, as documents.
+     *
+     * @param query what to look for
+     * @return the matching documents, in identifier order
+     */
+    public List<JsonNode> findPerformances(PerformanceCollection.Query query) {
+        return listPerformances().stream()
+                .filter(document -> query.matches(Performance.fromDocument(document)))
+                .toList();
     }
 
     /**
