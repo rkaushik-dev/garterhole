@@ -10,6 +10,7 @@ import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.method.MethodSerialiser;
 import io.github.rkaushikdev.garterhole.method.Title;
 import io.github.rkaushikdev.garterhole.records.Performance;
+import io.github.rkaushikdev.garterhole.records.PerformanceDocument;
 import io.github.rkaushikdev.garterhole.records.PerformanceValidator;
 import io.github.rkaushikdev.garterhole.store.Repository;
 import io.github.rkaushikdev.garterhole.store.UnitOfWork;
@@ -228,16 +229,7 @@ public final class Service {
             throw new ConflictException("this performance is already filed as " + Json.quote(rung.id()));
         }
         return UnitOfWork.inUnitOfWork(repository, unit -> {
-            ObjectNode document = Json.object();
-            document.put("tower", rung.tower());
-            document.put("date", rung.dateText());
-            document.put("title", rung.title());
-            document.put("changes", rung.changes());
-            rung.band().forEach(document.putArray("band")::add);
-            document.put("conductor", rung.conductor().orElse(null));
-            document.put("composer", rung.composer().orElse(null));
-            document.put("kind", rung.kind().label());
-            unit.put(PERFORMANCES, rung.id(), document);
+            unit.put(PERFORMANCES, rung.id(), PerformanceDocument.write(rung));
             logger.info("performance filed", Map.of("id", rung.id()));
             return new Filed(rung.id(), verdict.warnings());
         });

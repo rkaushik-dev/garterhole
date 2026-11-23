@@ -4,7 +4,6 @@ import static io.github.rkaushikdev.garterhole.util.Text.joinWords;
 import static io.github.rkaushikdev.garterhole.util.Text.plural;
 
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.records.Statistics.MethodCount;
 import io.github.rkaushikdev.garterhole.records.Statistics.RingerLine;
@@ -112,23 +111,12 @@ public final class Writers {
             }
         },
 
-        /** JSON, indented, for anything that is going to read it back. */
+        /** JSON, indented, each performance written the way the store keeps it, for anything that reads it back. */
         JSON("json", "application/json") {
             @Override
             public String write(List<Performance> records, Options options) {
                 ArrayNode written = Json.array();
-                for (Performance rung : records) {
-                    ObjectNode entry = written.addObject();
-                    entry.put("date", rung.dateText());
-                    entry.put("tower", rung.tower());
-                    entry.put("title", rung.title());
-                    entry.put("changes", rung.changes());
-                    entry.put("kind", rung.kind().label());
-                    entry.put("conductor", rung.conductor().orElse(null));
-                    entry.put("composer", rung.composer().orElse(null));
-                    rung.band().forEach(entry.putArray("band")::add);
-                    rung.footnotes().forEach(entry.putArray("footnotes")::add);
-                }
+                records.forEach(rung -> written.add(PerformanceDocument.write(rung)));
                 return Json.pretty(written);
             }
         };

@@ -184,6 +184,18 @@ class ServiceTest {
         }
 
         @Test
+        void keepsTheFootnotesAndTheTimeItWasFiledWith() {
+            ObjectNode fields = quarter();
+            fields.put("duration", 46);
+            fields.putArray("footnotes").add("First quarter for Frank.");
+            Service.Filed filed = service.filePerformance(fields);
+            JsonNode stored = repository.find(Service.PERFORMANCES, filed.id()).orElseThrow();
+            assertThat(stored.get("duration").asInt()).isEqualTo(46);
+            assertThat(stored.get("footnotes")).isEqualTo(Json.parse("[\"First quarter for Frank.\"]"));
+            assertThat(service.listPerformances().get(0).get("kind").asText()).isEqualTo("quarter peal");
+        }
+
+        @Test
         void reportsTheWarningsWithoutRefusing() {
             ObjectNode fields = quarter();
             fields.remove("conductor");

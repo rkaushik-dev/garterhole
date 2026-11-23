@@ -9,7 +9,6 @@ import io.github.rkaushikdev.garterhole.composition.Lengths;
 import io.github.rkaushikdev.garterhole.method.Title;
 import io.github.rkaushikdev.garterhole.util.Guards;
 import io.github.rkaushikdev.garterhole.util.Json;
-import io.github.rkaushikdev.garterhole.validation.Coerce;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -101,30 +100,7 @@ public final class Performance {
      * @throws ValidationException when the document does not describe a performance
      */
     public static Performance fromDocument(JsonNode document) {
-        if (document == null || !document.isObject()) {
-            throw new ValidationException("a performance needs a definition object");
-        }
-        Builder builder = builder()
-                .tower(textOf(document.path("tower")))
-                .title(textOf(document.path("title")))
-                .date(dateOf(document.path("date")))
-                .changes(wholeNumber(document.path("changes"), " is not a number of changes"))
-                .band(bandOf(document.path("band")))
-                .footnotes(footnotesOf(document.path("footnotes")))
-                .handbells(document.path("handbells").asBoolean(false));
-        JsonNode conductor = document.path("conductor");
-        if (isGiven(conductor)) {
-            builder.conductor(givenText(conductor, "the conductor"));
-        }
-        JsonNode composer = document.path("composer");
-        if (isGiven(composer)) {
-            builder.composer(givenText(composer, "the composer"));
-        }
-        JsonNode duration = document.path("duration");
-        if (isGiven(duration)) {
-            builder.duration(wholeNumber(duration, " is not a length of time in minutes"));
-        }
-        return builder.build();
+        return PerformanceDocument.read(document);
     }
 
     /**
@@ -276,49 +252,6 @@ public final class Performance {
     @Override
     public String toString() {
         return tower + ", " + dateText() + ": " + changes + " " + title;
-    }
-
-    private static boolean isGiven(JsonNode value) {
-        return !Json.isUndefined(value) && !value.isNull();
-    }
-
-    private static String textOf(JsonNode value) {
-        return value.isTextual() ? value.textValue() : null;
-    }
-
-    private static String givenText(JsonNode value, String label) {
-        if (!value.isTextual()) {
-            throw new IllegalArgumentException(label + " must be a string");
-        }
-        return value.textValue();
-    }
-
-    private static LocalDate dateOf(JsonNode value) {
-        return value.isTextual() ? Coerce.parseDate(value.textValue()).orElse(null) : null;
-    }
-
-    private static int wholeNumber(JsonNode value, String complaint) {
-        if (!value.isNumber() || value.doubleValue() != Math.rint(value.doubleValue()) || !value.canConvertToInt()) {
-            throw new ValidationException(Json.templateText(value) + complaint);
-        }
-        return value.intValue();
-    }
-
-    private static List<String> bandOf(JsonNode value) {
-        if (!value.isArray()) {
-            return null;
-        }
-        List<String> names = new ArrayList<>(value.size());
-        value.forEach(name -> names.add(textOf(name)));
-        return names;
-    }
-
-    private static List<String> footnotesOf(JsonNode value) {
-        List<String> lines = new ArrayList<>();
-        if (value.isArray()) {
-            value.forEach(line -> lines.add(Json.templateText(line)));
-        }
-        return lines;
     }
 
     /**
