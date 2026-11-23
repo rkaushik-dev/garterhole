@@ -3,10 +3,12 @@ package io.github.rkaushikdev.garterhole.core;
 import io.github.rkaushikdev.garterhole.util.Guards;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 
 /**
@@ -19,6 +21,9 @@ import java.util.function.IntFunction;
  * {@code 13524} and the tenor stands behind it.
  */
 public final class NamedRows {
+
+    /** Each stage's named rows, keyed by the row, filled in as stages are asked about. */
+    private static final Map<Integer, Map<Row, String>> BY_ROW = new ConcurrentHashMap<>();
 
     private NamedRows() {}
 
@@ -116,15 +121,22 @@ public final class NamedRows {
     }
 
     /**
+     * The name of a row. The names at each stage are worked out once and kept,
+     * because the music scorer and the call change caller both ask about
+     * every row they see. Where two names give the same row the one listed
+     * first in {@link #namedRows} wins.
+     *
      * @param row a row
      * @return its name, when it has one
      */
     public static Optional<String> nameOfRow(Row row) {
         Guards.present(row, "a row is needed to look up its name");
-        return namedRows(row.stage()).entrySet().stream()
-                .filter(entry -> entry.getValue().equals(row))
-                .map(Map.Entry::getKey)
-                .findFirst();
+        Map<Row, String> names = BY_ROW.computeIfAbsent(row.stage(), stage -> {
+            Map<Row, String> inverted = new HashMap<>();
+            namedRows(stage).forEach((name, named) -> inverted.putIfAbsent(named, name));
+            return Map.copyOf(inverted);
+        });
+        return Optional.ofNullable(names.get(row));
     }
 
     private static Row build(int stage, IntFunction<List<Integer>> bells) {

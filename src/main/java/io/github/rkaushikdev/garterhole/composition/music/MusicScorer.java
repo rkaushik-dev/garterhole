@@ -10,11 +10,9 @@ import io.github.rkaushikdev.garterhole.core.Row;
 import io.github.rkaushikdev.garterhole.core.Stroke;
 import io.github.rkaushikdev.garterhole.util.Json;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Scoring the music in a composition.
@@ -182,9 +180,9 @@ public final class MusicScorer {
         }
         if (rule.namedRow().isPresent()) {
             String wanted = rule.namedRow().get();
-            RowNames names = new RowNames();
             return (int) counted.stream()
-                    .filter(row -> names.nameOf(row).filter(wanted::equals).isPresent())
+                    .filter(row ->
+                            NamedRows.nameOfRow(row).filter(wanted::equals).isPresent())
                     .count();
         }
         Map<String, Object> details = new LinkedHashMap<>();
@@ -270,10 +268,9 @@ public final class MusicScorer {
             RunCount counts = entry.getValue();
             runs.add(new RunLine(entry.getKey(), counts.front(), counts.back(), counts.total()));
         }
-        RowNames names = new RowNames();
         Map<String, Integer> named = new LinkedHashMap<>();
         for (Row row : kept) {
-            names.nameOf(row)
+            NamedRows.nameOfRow(row)
                     .filter(name -> !name.equals("Rounds"))
                     .ifPresent(name -> named.merge(name, 1, Integer::sum));
         }
@@ -313,23 +310,5 @@ public final class MusicScorer {
         List<Row> kept = new ArrayList<>();
         rows.forEach(kept::add);
         return kept;
-    }
-
-    /**
-     * The name of each named row, worked out once per stage rather than once per
-     * row. Where two names give the same row the one listed first wins, as it
-     * does in {@link NamedRows#nameOfRow}.
-     */
-    private static final class RowNames {
-        private final Map<Integer, Map<Row, String>> byStage = new HashMap<>();
-
-        Optional<String> nameOf(Row row) {
-            Map<Row, String> names = byStage.computeIfAbsent(row.stage(), stage -> {
-                Map<Row, String> inverted = new HashMap<>();
-                NamedRows.namedRows(stage).forEach((name, named) -> inverted.putIfAbsent(named, name));
-                return inverted;
-            });
-            return Optional.ofNullable(names.get(row));
-        }
     }
 }
