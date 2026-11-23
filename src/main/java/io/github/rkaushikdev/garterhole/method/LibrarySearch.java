@@ -3,14 +3,15 @@ package io.github.rkaushikdev.garterhole.method;
 import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.util.LocaleOrder;
 import io.github.rkaushikdev.garterhole.util.Text;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -28,32 +29,28 @@ public final class LibrarySearch {
     private LibrarySearch() {}
 
     /**
-     * What to look for. Every field is optional, and a query with nothing in it
-     * matches every method. Build one from {@link #all()} and narrow it.
+     * A method being looked at, with the facts the narrowing asks about worked
+     * out once rather than once for every part of the query.
+     */
+    private record Candidate(Method method, Classification facts, String title) {
+
+        static Candidate of(Method method) {
+            return new Candidate(method, Classifier.classify(method), Title.of(method));
+        }
+    }
+
+    /**
+     * What to look for. A query is a list of narrowings, and a query with none
+     * in it matches every method. Build one from {@link #all()} and narrow it;
+     * each narrowing gives a new query and leaves the old one as it was.
      */
     public static final class Query {
-        private static final Query ALL = new Query(null, null, null, null, null, null);
+        private static final Query ALL = new Query(List.of());
 
-        private final Integer stage;
-        private final String className;
-        private final String name;
-        private final Method sharesLeadHeadWith;
-        private final Boolean little;
-        private final Boolean differential;
+        private final List<Predicate<Candidate>> narrowings;
 
-        private Query(
-                Integer stage,
-                String className,
-                String name,
-                Method sharesLeadHeadWith,
-                Boolean little,
-                Boolean differential) {
-            this.stage = stage;
-            this.className = className;
-            this.name = name;
-            this.sharesLeadHeadWith = sharesLeadHeadWith;
-            this.little = little;
-            this.differential = differential;
+        private Query(List<Predicate<Candidate>> narrowings) {
+            this.narrowings = List.copyOf(narrowings);
         }
 
         /**
@@ -68,7 +65,7 @@ public final class LibrarySearch {
          * @return this query, matching only methods at that stage
          */
         public Query stage(int wanted) {
-            return new Query(wanted, className, name, sharesLeadHeadWith, little, differential);
+            return and(candidate -> candidate.method().stage() == wanted);
         }
 
         /**
@@ -76,7 +73,7 @@ public final class LibrarySearch {
          * @return this query, matching only methods of that class
          */
         public Query className(String wanted) {
-            return new Query(stage, wanted, name, sharesLeadHeadWith, little, differential);
+            return and(candidate -> candidate.facts().className().equals(wanted));
         }
 
         /**
@@ -84,7 +81,8 @@ public final class LibrarySearch {
          * @return this query, matching only titles that contain it
          */
         public Query name(String piece) {
-            return new Query(stage, className, piece, sharesLeadHeadWith, little, differential);
+            String wanted = Text.squash(piece).toLowerCase(Locale.ROOT);
+            return and(candidate -> candidate.title().toLowerCase(Locale.ROOT).contains(wanted));
         }
 
         /**
@@ -92,7 +90,21 @@ public final class LibrarySearch {
          * @return this query, matching only methods that finish where that one finishes
          */
         public Query sharesLeadHeadWith(Method method) {
-            return new Query(stage, className, name, method, little, differential);
+            String wanted = LeadHeads.leadHeadSignature(method);
+            return and(
+                    candidate -> LeadHeads.leadHeadSignature(candidate.method()).equals(wanted));
+        }
+
+        /**
+         * The question a band choosing methods to splice asks first: which of
+         * these are {@code b} methods?
+         *
+         * @param code a lead head code, for example {@code b} or {@code j1}
+         * @return this query, matching only methods with that lead head code
+         */
+        public Query leadHeadCode(String code) {
+            return and(candidate ->
+                    LeadHeadCode.codeOf(candidate.method()).filter(code::equals).isPresent());
         }
 
         /**
@@ -100,7 +112,7 @@ public final class LibrarySearch {
          * @return this query, matching only methods that are, or are not, little
          */
         public Query little(boolean wanted) {
-            return new Query(stage, className, name, sharesLeadHeadWith, wanted, differential);
+            return and(candidate -> candidate.facts().little() == wanted);
         }
 
         /**
@@ -108,7 +120,17 @@ public final class LibrarySearch {
          * @return this query, matching only methods that are, or are not, differential
          */
         public Query differential(boolean wanted) {
-            return new Query(stage, className, name, sharesLeadHeadWith, little, wanted);
+            return and(candidate -> candidate.facts().differential() == wanted);
+        }
+
+        private Query and(Predicate<Candidate> narrowing) {
+            List<Predicate<Candidate>> more = new ArrayList<>(narrowings);
+            more.add(narrowing);
+            return new Query(more);
+        }
+
+        private boolean matches(Candidate candidate) {
+            return narrowings.stream().allMatch(narrowing -> narrowing.test(candidate));
         }
     }
 
@@ -132,39 +154,28 @@ public final class LibrarySearch {
         if (library == null) {
             throw new ValidationException("a MethodLibrary is needed to search");
         }
-        Optional<String> wantedName =
-                Optional.ofNullable(query.name).map(piece -> Text.squash(piece).toLowerCase(Locale.ROOT));
-        Optional<String> wantedLeadHead =
-                Optional.ofNullable(query.sharesLeadHeadWith).map(LeadHeads::leadHeadSignature);
-        Map<Method, String> matches = new LinkedHashMap<>();
+        List<Candidate> matches = new ArrayList<>();
         for (Method method : library) {
-            if (query.stage != null && method.stage() != query.stage) {
-                continue;
+            Candidate candidate = Candidate.of(method);
+            if (query.matches(candidate)) {
+                matches.add(candidate);
             }
-            Classification facts = Classifier.classify(method);
-            if (query.className != null && !facts.className().equals(query.className)) {
-                continue;
-            }
-            if (query.little != null && facts.little() != query.little) {
-                continue;
-            }
-            if (query.differential != null && facts.differential() != query.differential) {
-                continue;
-            }
-            String title = Title.of(method);
-            if (wantedName.isPresent() && !title.toLowerCase(Locale.ROOT).contains(wantedName.get())) {
-                continue;
-            }
-            if (wantedLeadHead.isPresent()
-                    && !LeadHeads.leadHeadSignature(method).equals(wantedLeadHead.get())) {
-                continue;
-            }
-            matches.put(method, title);
         }
-        return matches.entrySet().stream()
-                .sorted(Map.Entry.comparingByValue(Comparator.naturalOrder()))
-                .map(Map.Entry::getKey)
+        return matches.stream()
+                .sorted(Comparator.comparing(Candidate::title))
+                .map(Candidate::method)
                 .toList();
+    }
+
+    /**
+     * @param library a library
+     * @return how many methods it holds with each lead head code, keyed by
+     *     stage and code as {@code 8:b}, leaving out the methods with none
+     */
+    public static Map<String, Integer> countByCode(MethodLibrary library) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        LeadHeads.groupByCode(library.methods()).forEach((key, members) -> counts.put(key, members.size()));
+        return Collections.unmodifiableMap(counts);
     }
 
     /**

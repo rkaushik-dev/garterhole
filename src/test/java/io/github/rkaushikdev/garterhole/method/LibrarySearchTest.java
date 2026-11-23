@@ -99,6 +99,22 @@ class LibrarySearchTest {
         }
 
         @Test
+        void findsTheMethodsWithALeadHeadCode() {
+            assertThat(names(search(library, Query.all().leadHeadCode("b")))).containsExactly("Cambridge", "Yorkshire");
+            assertThat(names(search(library, Query.all().leadHeadCode("a")))).containsExactly("Plain", "Plain");
+            assertThat(search(library, Query.all().leadHeadCode("q"))).isEmpty();
+        }
+
+        @Test
+        void leavesTheQueryItNarrowedAsItWas() {
+            Query major = Query.all().stage(8);
+            Query surprise = major.className("Surprise");
+            assertThat(search(library, major)).hasSize(5);
+            assertThat(search(library, surprise)).hasSize(3);
+            assertThat(search(library, Query.all())).hasSize(6);
+        }
+
+        @Test
         void combinesFilters() {
             assertThat(search(
                             library, Query.all().stage(8).className("Surprise").name("york")))
@@ -155,6 +171,24 @@ class LibrarySearchTest {
             MethodLibrary small = new MethodLibrary();
             small.addAll(List.of(cambridge(), bristol()));
             assertThat(spliceGroups(small)).isEmpty();
+        }
+    }
+
+    @Nested
+    class CountByCode {
+
+        @Test
+        void countsTheMethodsInEachCodeAtEachStage() {
+            assertThat(LibrarySearch.countByCode(library))
+                    .containsEntry("8:b", 2)
+                    .containsEntry("8:m", 1)
+                    .containsEntry("8:a", 1)
+                    .containsEntry("6:a", 1);
+        }
+
+        @Test
+        void countsNothingInAnEmptyLibrary() {
+            assertThat(LibrarySearch.countByCode(new MethodLibrary())).isEmpty();
         }
     }
 
