@@ -4,6 +4,7 @@ import io.github.rkaushikdev.garterhole.ValidationException;
 import io.github.rkaushikdev.garterhole.util.Guards;
 import io.github.rkaushikdev.garterhole.util.Json;
 import io.github.rkaushikdev.garterhole.validation.Coerce;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -27,12 +28,6 @@ public final class Bell {
     /** Pounds in a quarter. */
     public static final int POUNDS_PER_QUARTER = 28;
 
-    /**
-     * The notes a bell can be tuned to, sharps only, as they are written on a
-     * tower's board.
-     */
-    private static final List<String> NOTES = List.of("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B");
-
     private static final int EARLIEST_CASTING = 1200;
     private static final int LATEST_CASTING = 2200;
     private static final int MOST_QUARTERS = 3;
@@ -41,6 +36,7 @@ public final class Bell {
     private final int number;
     private final double weightPounds;
     private final String note;
+    private final Note pitch;
     private final String founder;
     private final Integer cast;
 
@@ -48,7 +44,7 @@ public final class Bell {
      * What is known about a bell besides its number and its weight. Each part
      * is {@code null} when it is not known.
      *
-     * @param note the note it is tuned to, sharps only
+     * @param note the note it is tuned to, with a sharp or a flat as the board writes it
      * @param founder who cast it
      * @param cast the year it was cast
      */
@@ -118,15 +114,14 @@ public final class Bell {
         if (!(weightPounds > 0)) {
             throw new ValidationException("a bell cannot weigh " + Json.number(weightPounds) + " pounds");
         }
-        if (details.note() != null && !NOTES.contains(details.note())) {
-            throw new ValidationException(Json.quote(details.note()) + " is not a note");
-        }
+        Note tuned = details.note() == null ? null : Note.parse(details.note());
         if (details.cast() != null && (details.cast() < EARLIEST_CASTING || details.cast() > LATEST_CASTING)) {
             throw new ValidationException(details.cast() + " is not a year a bell was cast in");
         }
         this.number = number;
         this.weightPounds = weightPounds;
-        this.note = details.note();
+        this.pitch = tuned;
+        this.note = details.note() == null ? null : Note.tidy(details.note());
         this.founder = details.founder();
         this.cast = details.cast();
     }
@@ -176,10 +171,15 @@ public final class Bell {
     }
 
     /**
-     * @return every note a bell may be tuned to, as a list the caller may change
+     * @return every note a bell may be tuned to, in their sharp spellings, as a
+     *     list the caller may change; the flat spellings are read as well
      */
     public static List<String> notes() {
-        return new java.util.ArrayList<>(NOTES);
+        List<String> names = new ArrayList<>();
+        for (Note each : Note.values()) {
+            names.add(each.sharpName());
+        }
+        return names;
     }
 
     /**
@@ -197,10 +197,18 @@ public final class Bell {
     }
 
     /**
-     * @return the note it is tuned to, when that is known
+     * @return the note it is tuned to, spelt the way it was given, when that is known
      */
     public Optional<String> note() {
         return Optional.ofNullable(note);
+    }
+
+    /**
+     * @return the note it is tuned to as a pitch, so that {@code Eb} and {@code D#}
+     *     compare equal, when that is known
+     */
+    public Optional<Note> pitch() {
+        return Optional.ofNullable(pitch);
     }
 
     /**

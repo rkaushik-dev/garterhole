@@ -159,6 +159,21 @@ class BellTest {
         }
 
         @Test
+        void readsAFlatAsTheSameNoteAsTheSharp() {
+            Bell flat = new Bell(8, 2643, Details.NONE.withNote("Eb"));
+            Bell sharp = new Bell(8, 2643, Details.NONE.withNote("D#"));
+            assertThat(flat.pitch()).isEqualTo(sharp.pitch()).contains(Note.D_SHARP);
+        }
+
+        @Test
+        void keepsTheSpellingTheBoardUses() {
+            Bell bell = new Bell(1, 400, Details.NONE.withNote("bb"));
+            assertThat(bell.note()).hasValue("Bb");
+            assertThat(bell).hasToString("bell 1, 3-2-8 in Bb");
+            assertThat(new Bell(1, 400).pitch()).isEmpty();
+        }
+
+        @Test
         void handsBackACopy() {
             List<String> first = Bell.notes();
             first.add("H");
