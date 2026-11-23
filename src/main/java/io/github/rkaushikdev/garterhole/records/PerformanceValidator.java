@@ -5,12 +5,14 @@ import io.github.rkaushikdev.garterhole.composition.Lengths;
 import io.github.rkaushikdev.garterhole.core.Stage;
 import io.github.rkaushikdev.garterhole.method.Title;
 import io.github.rkaushikdev.garterhole.util.Json;
+import io.github.rkaushikdev.garterhole.util.Text;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -29,6 +31,44 @@ public final class PerformanceValidator {
 
     private static final double FASTEST_SECONDS_PER_CHANGE = 1;
     private static final double SLOWEST_SECONDS_PER_CHANGE = 5;
+
+    private static final Pattern TRAILING_STOP = Pattern.compile("[.!]+$");
+
+    /**
+     * One thing a check found, as the sentence sent back to whoever filed the
+     * record.
+     *
+     * @param refuses true for a problem, which stops the record being filed,
+     *     and false for a warning, which does not
+     * @param sentence what was found
+     */
+    private record Note(boolean refuses, String sentence) {
+
+        static Note problem(String sentence) {
+            return new Note(true, sentence);
+        }
+
+        static Note warning(String sentence) {
+            return new Note(false, sentence);
+        }
+    }
+
+    /** One check, which may find nothing or several things. */
+    @FunctionalInterface
+    private interface Check {
+        List<Note> apply(Performance rung, Options options);
+    }
+
+    /** Every check, in the order their sentences are reported. */
+    private static final List<Check> CHECKS = List.of(
+            PerformanceValidator::bandSize,
+            PerformanceValidator::oneBellEach,
+            PerformanceValidator::conductorRecorded,
+            PerformanceValidator::notInTheFuture,
+            PerformanceValidator::lengthClaimed,
+            (rung, options) -> speedWarnings(rung).stream().map(Note::warning).toList(),
+            (rung, options) ->
+                    footnoteWarnings(rung).stream().map(Note::warning).toList());
 
     private PerformanceValidator() {}
 
@@ -115,7 +155,8 @@ public final class PerformanceValidator {
     }
 
     /**
-     * Check a performance.
+     * Check a performance. The title is read first, since every other check
+     * needs the stage; the rest are run in turn and each says what it found.
      *
      * @param rung the performance
      * @param options the day to check on and any claim about the length
@@ -126,34 +167,46 @@ public final class PerformanceValidator {
         if (rung == null) {
             throw new ValidationException("a Performance is needed to check it");
         }
-        List<String> problems = new ArrayList<>();
-        List<String> warnings = new ArrayList<>();
         if (!Title.isWellFormed(rung.title())) {
-            problems.add(Json.quote(rung.title()) + " is not a method title");
-            return new Verdict(false, List.copyOf(problems), List.copyOf(warnings));
+            return new Verdict(false, List.of(Json.quote(rung.title()) + " is not a method title"), List.of());
         }
-        int stage = rung.stage();
-        List<Integer> sizes = acceptableBandSizes(stage, rung.handbells());
-        if (!sizes.contains(rung.bandSize())) {
-            String allowed = sizes.stream().map(String::valueOf).collect(Collectors.joining(" or "));
-            String where = rung.handbells() ? " on handbells" : "";
-            problems.add(rung.title() + where + " needs a band of " + allowed + " and this one has " + rung.bandSize());
+        List<Note> notes = CHECKS.stream()
+                .flatMap(check -> check.apply(rung, options).stream())
+                .toList();
+        List<String> problems =
+                notes.stream().filter(Note::refuses).map(Note::sentence).toList();
+        List<String> warnings = notes.stream()
+                .filter(note -> !note.refuses())
+                .map(Note::sentence)
+                .toList();
+        return new Verdict(problems.isEmpty(), problems, warnings);
+    }
+
+    /**
+     * A footnote that records a first or a milestone for somebody who is not
+     * in the band. It is nearly always a name typed two ways, and the reporter
+     * would rather hear about it before the record is printed.
+     *
+     * @param rung the performance
+     * @return a warning for each footnote that names an outsider
+     */
+    public static List<String> footnoteWarnings(Performance rung) {
+        List<String> warnings = new ArrayList<>();
+        for (Footnote line : Footnote.readAll(rung.footnotes())) {
+            if (line.kind() != Footnote.Kind.FIRST && line.kind() != Footnote.Kind.MILESTONE) {
+                continue;
+            }
+            int at = line.text().lastIndexOf(" for ");
+            if (at == -1) {
+                continue;
+            }
+            String who = Text.squash(
+                    TRAILING_STOP.matcher(line.text().substring(at + 5)).replaceAll(""));
+            if (!who.isEmpty() && !rung.band().contains(who)) {
+                warnings.add("the footnote " + Json.quote(line.text()) + " is for " + who + ", who is not in the band");
+            }
         }
-        if (new HashSet<>(rung.band()).size() != rung.bandSize()) {
-            problems.add("somebody is down for more than one bell");
-        }
-        if (rung.conductor().isEmpty()) {
-            warnings.add("no conductor is recorded");
-        }
-        LocalDate today = options.today().orElseGet(() -> LocalDate.now(ZoneOffset.UTC));
-        if (rung.date().isAfter(today)) {
-            problems.add("the date " + rung.dateText() + " is in the future");
-        }
-        options.claim().ifPresent(claim -> Lengths.checkLength(rung.changes(), stage, claim)
-                .reason()
-                .ifPresent(problems::add));
-        warnings.addAll(speedWarnings(rung));
-        return new Verdict(problems.isEmpty(), List.copyOf(problems), List.copyOf(warnings));
+        return List.copyOf(warnings);
     }
 
     /**
@@ -210,5 +263,41 @@ public final class PerformanceValidator {
             return "nothing wrong with it, but " + String.join("; ", verdict.warnings());
         }
         return String.join("; ", verdict.problems());
+    }
+
+    private static List<Note> bandSize(Performance rung, Options options) {
+        List<Integer> sizes = acceptableBandSizes(rung.stage(), rung.handbells());
+        if (sizes.contains(rung.bandSize())) {
+            return List.of();
+        }
+        String allowed = sizes.stream().map(String::valueOf).collect(Collectors.joining(" or "));
+        String where = rung.handbells() ? " on handbells" : "";
+        return List.of(Note.problem(
+                rung.title() + where + " needs a band of " + allowed + " and this one has " + rung.bandSize()));
+    }
+
+    private static List<Note> oneBellEach(Performance rung, Options options) {
+        return new HashSet<>(rung.band()).size() == rung.bandSize()
+                ? List.of()
+                : List.of(Note.problem("somebody is down for more than one bell"));
+    }
+
+    private static List<Note> conductorRecorded(Performance rung, Options options) {
+        return rung.conductor().isPresent() ? List.of() : List.of(Note.warning("no conductor is recorded"));
+    }
+
+    private static List<Note> notInTheFuture(Performance rung, Options options) {
+        LocalDate today = options.today().orElseGet(() -> LocalDate.now(ZoneOffset.UTC));
+        return rung.date().isAfter(today)
+                ? List.of(Note.problem("the date " + rung.dateText() + " is in the future"))
+                : List.of();
+    }
+
+    private static List<Note> lengthClaimed(Performance rung, Options options) {
+        return options.claim()
+                .flatMap(claim ->
+                        Lengths.checkLength(rung.changes(), rung.stage(), claim).reason())
+                .map(reason -> List.of(Note.problem(reason)))
+                .orElse(List.of());
     }
 }

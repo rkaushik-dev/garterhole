@@ -187,6 +187,49 @@ class PerformanceValidatorTest {
     }
 
     @Nested
+    class FootnoteWarnings {
+
+        @Test
+        void warnsAboutAFirstForSomebodyWhoIsNotInTheBand() {
+            Verdict verdict = check(fields -> fields.footnotes(List.of("First quarter peal for Gina.")));
+            assertThat(verdict.ok()).isTrue();
+            assertThat(verdict.warnings())
+                    .containsExactly(
+                            "the footnote \"First quarter peal for Gina.\" is for Gina, who is not in the band");
+        }
+
+        @Test
+        void warnsAboutAMilestoneTooButNotAboutAFirstForSomebodyInTheBand() {
+            Performance rung = fields().footnotes(List.of(
+                            "First quarter peal for Bob.",
+                            "100th quarter peal for Bobby.",
+                            "Rung for the birthday of Gina."))
+                    .build();
+            assertThat(PerformanceValidator.footnoteWarnings(rung))
+                    .hasSize(1)
+                    .first()
+                    .asString()
+                    .contains("Bobby");
+        }
+
+        @Test
+        void leavesAFirstWithNobodyNamedAlone() {
+            Performance rung = fields().footnotes(List.of("First quarter peal on the new bells."))
+                    .build();
+            assertThat(PerformanceValidator.footnoteWarnings(rung)).isEmpty();
+        }
+
+        @Test
+        void putsTheWarningsAfterTheOnesAboutTheTime() {
+            Verdict verdict = check(
+                    fields -> fields.conductor(null).duration(10).footnotes(List.of("First quarter peal for Gina!")));
+            assertThat(verdict.warnings()).hasSize(3);
+            assertThat(verdict.warnings().get(0)).isEqualTo("no conductor is recorded");
+            assertThat(verdict.warnings().get(2)).contains("is for Gina");
+        }
+    }
+
+    @Nested
     class ValidateAll {
 
         @Test
