@@ -11,6 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.rkaushikdev.garterhole.ValidationException;
+import io.github.rkaushikdev.garterhole.composition.Prover.ExtentProof;
 import io.github.rkaushikdev.garterhole.composition.Prover.Proof;
 import io.github.rkaushikdev.garterhole.composition.TouchExpander.Rung;
 import io.github.rkaushikdev.garterhole.composition.TruthTracker.Repeat;
@@ -18,11 +19,33 @@ import io.github.rkaushikdev.garterhole.core.Row;
 import io.github.rkaushikdev.garterhole.core.RowBlock;
 import io.github.rkaushikdev.garterhole.method.Method;
 import io.github.rkaushikdev.garterhole.method.PlainCourse;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class ProverTest {
+
+    /** Every row of the stage, in an order no band would ring but every prover accepts. */
+    private static List<Row> extent(int stage) {
+        List<Row> rows = new ArrayList<>();
+        permute(new ArrayList<>(), stage, rows);
+        return rows;
+    }
+
+    private static void permute(List<Integer> prefix, int stage, List<Row> into) {
+        if (prefix.size() == stage) {
+            into.add(Row.of(prefix));
+            return;
+        }
+        for (int bell = 1; bell <= stage; bell += 1) {
+            if (!prefix.contains(bell)) {
+                prefix.add(bell);
+                permute(prefix, stage, into);
+                prefix.remove(prefix.size() - 1);
+            }
+        }
+    }
 
     private static Method plainBobMinor() {
         return Method.of("Plain", 6, "x1x1x1,2");
@@ -141,6 +164,89 @@ class ProverTest {
         void measuresAnOddStageOverTheChangingBells() {
             RowBlock doubles = PlainCourse.plainCourse(Method.of("Plain", 5, "5.1.5.1.5,125"));
             assertThat(isExtent(doubles)).isFalse();
+        }
+    }
+
+    @Nested
+    class ProvingExtentByExtent {
+
+        private RowBlock extents(int stage, int count) {
+            List<Row> rows = new ArrayList<>();
+            for (int index = 0; index < count; index += 1) {
+                rows.addAll(extent(stage));
+            }
+            rows.add(Row.rounds(stage));
+            return new RowBlock(rows);
+        }
+
+        @Test
+        void passesSevenTrueExtentsThatTheWholeBlockProofWouldCallFalse() {
+            RowBlock peal = extents(5, 7);
+            assertThat(prove(peal).isTrue()).isFalse();
+            ExtentProof proof = Prover.proveExtents(peal);
+            assertThat(proof).isEqualTo(new ExtentProof(120, 7, true, List.of(), true));
+            assertThat(proof.ok()).isTrue();
+            assertThat(Prover.describeExtents(proof)).isEqualTo("7 true extents of 120");
+        }
+
+        @Test
+        void namesTheExtentThatRepeatsARowWithinItself() {
+            List<Row> rows = new ArrayList<>(extents(4, 3).rows());
+            rows.set(30, rows.get(29));
+            ExtentProof proof = Prover.proveExtents(new RowBlock(rows));
+            assertThat(proof.falseExtents()).containsExactly(2);
+            assertThat(proof.ok()).isFalse();
+            assertThat(Prover.describeExtents(proof)).isEqualTo("3 extents of 24, false in 2");
+        }
+
+        @Test
+        void refusesABlockWithAPieceOfAnExtentLeftOver() {
+            List<Row> rows = new ArrayList<>(extents(4, 2).rows());
+            rows.addAll(0, extent(4).subList(0, 6));
+            ExtentProof proof = Prover.proveExtents(new RowBlock(rows));
+            assertThat(proof.whole()).isFalse();
+            assertThat(proof.ok()).isFalse();
+            assertThat(Prover.describeExtents(proof)).isEqualTo("not whole extents of 24");
+        }
+
+        @Test
+        void saysSoWhenTheExtentsDoNotComeRound() {
+            ExtentProof proof = Prover.proveExtents(new RowBlock(extent(4)));
+            assertThat(proof.comesRound()).isFalse();
+            assertThat(Prover.describeExtents(proof)).isEqualTo("1 extent of 24, but it does not come round");
+        }
+
+        @Test
+        void refusesSomethingThatIsNotABlock() {
+            assertThatThrownBy(() -> Prover.proveExtents(null)).isInstanceOf(ValidationException.class);
+        }
+    }
+
+    @Nested
+    class ChangingBells {
+
+        @Test
+        void leavesOutACoverThatNeverMoves() {
+            List<Row> covered = new ArrayList<>();
+            for (Row row : extentOfDoubles()) {
+                List<Integer> bells = new ArrayList<>(row.bells());
+                bells.add(6);
+                covered.add(Row.of(bells));
+            }
+            RowBlock block = new RowBlock(covered);
+            assertThat(Prover.changingBells(block)).isEqualTo(5);
+            assertThat(isExtent(block)).isTrue();
+        }
+
+        @Test
+        void callsAnExtentOfDoublesAnExtentAtAHundredAndTwentyRows() {
+            RowBlock doubles = new RowBlock(extentOfDoubles());
+            assertThat(Prover.changingBells(doubles)).isEqualTo(5);
+            assertThat(isExtent(doubles)).isTrue();
+        }
+
+        private List<Row> extentOfDoubles() {
+            return extent(5);
         }
     }
 

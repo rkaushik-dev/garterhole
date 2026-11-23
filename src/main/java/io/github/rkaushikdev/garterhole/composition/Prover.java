@@ -8,8 +8,10 @@ import io.github.rkaushikdev.garterhole.composition.TruthTracker.Repeat;
 import io.github.rkaushikdev.garterhole.core.Row;
 import io.github.rkaushikdev.garterhole.core.RowBlock;
 import io.github.rkaushikdev.garterhole.util.Json;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Proving a touch. A touch is true when no row is rung twice, and the only way
@@ -64,14 +66,84 @@ public final class Prover {
         if (block == null) {
             throw new ValidationException("a RowBlock is needed to prove it");
         }
-        boolean comesRound = block.comesRound();
-        TruthTracker tracker = new TruthTracker();
-        int upTo = comesRound && block.length() > 1 ? block.length() - 1 : block.length();
-        List<Row> rows = block.rows();
-        for (int index = 0; index < upTo; index += 1) {
-            tracker.add(rows.get(index));
+        TruthTracker tracker = track(rowsRung(block));
+        return new Proof(tracker.isTrue(), tracker.count(), tracker.distinct(), tracker.repeats(), block.comesRound());
+    }
+
+    /**
+     * What proving a block extent by extent found.
+     *
+     * @param extentLength how many rows an extent has over the bells that change
+     * @param extents how many whole extents the block holds
+     * @param whole true when the block is a whole number of extents, with nothing left over
+     * @param falseExtents the extents, counted from one, that repeat a row within themselves
+     * @param comesRound true when the block finishes where it started
+     */
+    public record ExtentProof(
+            long extentLength, int extents, boolean whole, List<Integer> falseExtents, boolean comesRound) {
+
+        /**
+         * @param extentLength how many rows an extent has
+         * @param extents how many whole extents the block holds
+         * @param whole true when nothing is left over
+         * @param falseExtents the false extents, counted from one
+         * @param comesRound true when the block comes round
+         */
+        public ExtentProof {
+            falseExtents = List.copyOf(falseExtents);
         }
-        return new Proof(tracker.isTrue(), tracker.count(), tracker.distinct(), tracker.repeats(), comesRound);
+
+        /**
+         * @return true when the block is whole extents, every one of them true, and comes round
+         */
+        public boolean ok() {
+            return whole && extents > 0 && falseExtents.isEmpty() && comesRound;
+        }
+    }
+
+    /**
+     * Prove a block that is meant to be a number of extents rung one after
+     * another, which is how a peal of Minor or Doubles is built. Proving it as
+     * one block calls it false, because the seven extents of a 5040 of Minor
+     * ring every row seven times; the rule is that each extent is true on its
+     * own, so that is what is checked.
+     *
+     * @param block the rows, with the closing rounds
+     * @return what was found
+     * @throws ValidationException when there is no block
+     */
+    public static ExtentProof proveExtents(RowBlock block) {
+        if (block == null) {
+            throw new ValidationException("a RowBlock is needed to prove it");
+        }
+        long extent = extentSize(changingBells(block));
+        List<Row> rows = rowsRung(block);
+        int extents = (int) (rows.size() / extent);
+        List<Integer> falseOnes = new ArrayList<>();
+        for (int index = 0; index < extents; index += 1) {
+            int from = (int) (index * extent);
+            if (!track(rows.subList(from, (int) (from + extent))).isTrue()) {
+                falseOnes.add(index + 1);
+            }
+        }
+        return new ExtentProof(extent, extents, rows.size() % extent == 0, falseOnes, block.comesRound());
+    }
+
+    /**
+     * The bells that change in a block: the stage, less any bells at the back
+     * that stay in their own place in every row. Doubles rung with the tenor
+     * covering is five changing bells on six, and its extent is a hundred and
+     * twenty, not seven hundred and twenty.
+     *
+     * @param block the rows
+     * @return how many bells change, counted from the treble
+     */
+    public static int changingBells(RowBlock block) {
+        int changing = block.stage();
+        while (changing > 1 && covers(block, changing)) {
+            changing -= 1;
+        }
+        return changing;
     }
 
     /**
@@ -95,28 +167,40 @@ public final class Prover {
      * @return the factorial of the stage
      */
     public static long extentSize(int stage) {
-        long total = 1;
-        for (int bell = 2; bell <= stage; bell += 1) {
-            total *= bell;
-        }
-        return total;
+        return Lengths.extentLength(stage);
     }
 
     /**
-     * True when the block contains every row at its stage exactly once. On an
-     * odd stage the cover bell never moves, so the extent is over the changing
-     * bells.
+     * True when the block contains every row of its changing bells exactly
+     * once. A cover bell that never moves is not one of them, so Doubles rung
+     * on six with the tenor behind is an extent at a hundred and twenty rows.
      *
      * @param block the rows
      * @return true when the block is an extent
      */
     public static boolean isExtent(RowBlock block) {
         Proof proof = prove(block);
-        if (!proof.isTrue()) {
-            return false;
+        return proof.isTrue() && proof.distinct() == extentSize(changingBells(block));
+    }
+
+    /**
+     * @param proof a proof of a block extent by extent
+     * @return a one line summary, for example {@code 7 true extents of 720}
+     */
+    public static String describeExtents(ExtentProof proof) {
+        String noun = proof.extents() == 1 ? "extent" : "extents";
+        String size = " of " + proof.extentLength();
+        if (!proof.whole()) {
+            return "not whole extents" + size;
         }
-        int changing = block.stage() % 2 == 1 ? block.stage() - 1 : block.stage();
-        return proof.distinct() == extentSize(changing);
+        if (!proof.falseExtents().isEmpty()) {
+            String which = proof.falseExtents().stream().map(String::valueOf).collect(Collectors.joining(", "));
+            return proof.extents() + " " + noun + size + ", false in " + which;
+        }
+        if (!proof.comesRound()) {
+            return proof.extents() + " " + noun + size + ", but it does not come round";
+        }
+        return proof.extents() + " true " + noun + size;
     }
 
     /**
@@ -142,5 +226,27 @@ public final class Prover {
         Repeat first = proof.repeats().get(0);
         return "false: " + first.row() + " is rung " + first.at().size() + " times, first at row "
                 + (first.at().get(0) + 1);
+    }
+
+    /** The rows that count, which leaves out the rounds a block closes on. */
+    private static List<Row> rowsRung(RowBlock block) {
+        List<Row> rows = block.rows();
+        boolean closes = block.comesRound() && block.length() > 1;
+        return closes ? rows.subList(0, rows.size() - 1) : rows;
+    }
+
+    private static TruthTracker track(List<Row> rows) {
+        TruthTracker tracker = new TruthTracker();
+        rows.forEach(tracker::add);
+        return tracker;
+    }
+
+    private static boolean covers(RowBlock block, int bell) {
+        for (Row row : block.rows()) {
+            if (row.bellAt(bell) != bell) {
+                return false;
+            }
+        }
+        return true;
     }
 }
